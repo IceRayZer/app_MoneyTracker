@@ -1,0 +1,28 @@
+# Version web de secours (sans détection des paiements) : publie assets/ sur GitHub Pages.
+# Prérequis unique : Settings > Pages > Source = « GitHub Actions ».
+name: Web
+
+on:
+  push:
+    branches: [main]
+    paths: ['app/src/main/assets/**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: app/src/main/assets
+      - id: deploy
+        uses: actions/deploy-pages@v4

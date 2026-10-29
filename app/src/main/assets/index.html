@@ -1,0 +1,999 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MoneyTracker</title>
+    <link rel="manifest" href="manifest.webmanifest">
+    <meta name="theme-color" content="#eef2ef" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#0f1513" media="(prefers-color-scheme: dark)">
+    <meta name="color-scheme" content="light dark">
+    <link rel="icon" href="icon-192.png">
+    <style>
+        :root {
+            color-scheme: light;
+            --paper: #eef2ef;
+            --surface: #ffffff;
+            --ink: #17211e;
+            --ink-2: #4a5753;
+            --line: #d3dcd8;
+            --brand: #0e5a48;
+            --on-brand: #ffffff;
+            --brand-soft: #dcebe5;
+            --pos: #136b3f;
+            --neg: #b42318;
+            --ticket: #fff3d1;
+            --ticket-edge: #8a6100;
+            --focus: #0e5a48;
+            /* Catégories de la barre de répartition (palette validée, ordre fixe) */
+            --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;
+            --s5: #e87ba4; --s6: #008300; --s7: #6250d6; --s8: #e34948; --s-other: #8a948f;
+            --serif: "Noto Serif", "Droid Serif", Georgia, serif;
+            --sans: Roboto, system-ui, -apple-system, "Segoe UI", sans-serif;
+        }
+        @media (prefers-color-scheme: dark) {
+            :root {
+                color-scheme: dark;
+                --paper: #0f1513;
+                --surface: #18201d;
+                --ink: #e8eeeb;
+                --ink-2: #a9b6b1;
+                --line: #2e3a35;
+                --brand: #5cc2a3;
+                --on-brand: #0f1513;
+                --brand-soft: #1f3a31;
+                --pos: #5dd39e;
+                --neg: #ff8a80;
+                --ticket: #2e2919;
+                --ticket-edge: #e0b44a;
+                --focus: #5cc2a3;
+                --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+                --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767; --s-other: #6f7a75;
+            }
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html { -webkit-text-size-adjust: 100%; }
+        body {
+            font: 16px/1.45 var(--sans);
+            background: var(--paper);
+            color: var(--ink);
+            min-height: 100vh;
+            padding-bottom: 88px; /* barre d'onglets */
+        }
+        main { max-width: 560px; margin: 0 auto; padding: 0 16px; }
+        h2 { font-size: 18px; font-weight: 600; }
+        button, input, select { font: inherit; color: inherit; }
+        :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+        [hidden] { display: none !important; }
+        .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+        .num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+        .pos { color: var(--pos); }
+        .neg { color: var(--neg); }
+        .muted { color: var(--ink-2); font-size: 14px; }
+
+        /* Boutons */
+        .btn {
+            min-height: 48px;
+            padding: 0 20px;
+            border-radius: 12px;
+            border: 1px solid transparent;
+            background: var(--brand);
+            color: var(--on-brand);
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .btn.ghost { background: transparent; color: var(--ink); border-color: var(--line); }
+        .btn.danger { background: transparent; color: var(--neg); border-color: currentColor; }
+        .btn.small { min-height: 44px; padding: 0 14px; font-size: 15px; }
+        .btn:disabled { opacity: .5; cursor: default; }
+        .icon-btn {
+            width: 48px; height: 48px; flex: none;
+            display: grid; place-items: center;
+            border-radius: 12px; border: none; cursor: pointer;
+            background: var(--brand-soft); color: var(--ink);
+        }
+        .icon-btn svg { width: 24px; height: 24px; }
+
+        /* Champs */
+        label.field { display: block; margin-bottom: 14px; }
+        label.field > span { display: block; font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+        input, select {
+            width: 100%;
+            min-height: 48px;
+            padding: 0 12px;
+            border: 1px solid var(--ink-2);
+            border-radius: 10px;
+            background: var(--surface);
+        }
+        input[type="date"] { padding: 0 8px; }
+
+        /* Accueil : le chiffre */
+        .hero { padding: 28px 0 20px; }
+        .hero-label { font-size: 15px; color: var(--ink-2); }
+        .hero-figure {
+            font-family: var(--serif);
+            font-weight: 700;
+            font-size: clamp(40px, 12vw, 56px);
+            line-height: 1.1;
+            letter-spacing: -0.02em;
+            margin: 4px 0 16px;
+        }
+        .hero-figure .cents { font-size: .5em; letter-spacing: 0; }
+        .ribbon { display: flex; gap: 2px; height: 12px; margin-bottom: 18px; }
+        .ribbon span { min-width: 4px; }
+        .ribbon span:first-child { border-radius: 4px 0 0 4px; }
+        .ribbon span:last-child { border-radius: 0 4px 4px 0; }
+        .ribbon span:only-child { border-radius: 4px; }
+        .flow { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+        .flow div { border-top: 2px solid var(--line); padding-top: 8px; }
+        .flow dt { font-size: 13px; color: var(--ink-2); }
+        .flow dd { font-weight: 600; font-size: 15px; }
+        .month-spent { margin-top: 14px; font-size: 15px; }
+
+        /* Saisie rapide */
+        .say { display: flex; gap: 8px; }
+        .say input { flex: 1; min-width: 0; }
+        .icon-btn.listening { background: var(--neg); color: #fff; }
+        @media (prefers-reduced-motion: no-preference) {
+            .icon-btn.listening { animation: pulse 1s infinite; }
+            dialog[open] { animation: rise .18s ease-out; }
+        }
+        @keyframes pulse { 50% { opacity: .65; } }
+        @keyframes rise { from { transform: translateY(24px); opacity: 0; } }
+        .say-hint { font-size: 14px; color: var(--ink-2); margin-top: 6px; }
+
+        /* Sections */
+        .block { margin-top: 28px; }
+        .block-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+        .list { list-style: none; background: var(--surface); border-radius: 14px; overflow: hidden; }
+        .list > li + li { border-top: 1px solid var(--line); }
+        .row {
+            display: flex; align-items: center; gap: 12px;
+            width: 100%; min-height: 56px; padding: 10px 14px;
+            background: none; border: none; text-align: left; cursor: pointer;
+        }
+        .row .main { flex: 1; min-width: 0; }
+        .row .title { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .row .sub { display: block; font-size: 14px; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .row .amt { font-weight: 600; }
+        .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+        .empty { padding: 20px 14px; color: var(--ink-2); text-align: center; background: var(--surface); border-radius: 14px; }
+        .empty .btn { margin-top: 12px; }
+
+        /* Comptes réordonnables */
+        .acc-item { display: flex; align-items: center; }
+        .acc-item .row { padding-left: 4px; }
+        .handle {
+            width: 44px; height: 56px; flex: none; border: none; background: none;
+            color: var(--ink-2); cursor: grab; touch-action: none; font-size: 20px;
+        }
+        .acc-item.dragging { background: var(--brand-soft); }
+
+        /* Détails par compte sur l'accueil */
+        details.acc > summary { list-style: none; }
+        details.acc > summary::-webkit-details-marker { display: none; }
+        details.acc > summary .chev { transition: transform .15s; color: var(--ink-2); }
+        details.acc[open] > summary .chev { transform: rotate(90deg); }
+        .acc-body { padding: 0 14px 14px 36px; font-size: 15px; }
+        .kv { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; }
+        .kv.total { font-weight: 600; border-top: 1px solid var(--line); margin-top: 4px; padding-top: 8px; }
+        .acc-body .entries { margin-top: 8px; }
+
+        /* Paiements à valider : tickets de caisse */
+        .count {
+            display: inline-grid; place-items: center; min-width: 24px; height: 24px; padding: 0 6px;
+            border-radius: 12px; background: var(--ticket-edge); color: var(--paper); font-size: 14px; margin-left: 6px;
+        }
+        .ticket {
+            background: var(--ticket);
+            border-radius: 14px;
+            padding: 14px;
+            border-left: 4px dashed var(--ticket-edge);
+        }
+        .ticket + .ticket { margin-top: 10px; }
+        .ticket-top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 12px; }
+        .ticket-amt { font-family: var(--serif); font-weight: 700; font-size: 26px; }
+        .ticket .actions { display: flex; gap: 8px; }
+        .ticket .actions .btn:last-child { flex: 1; }
+        .ticket .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+        .ticket label.field { margin: 0; min-width: 0; }
+
+        .banner {
+            background: var(--surface); border-radius: 14px; padding: 14px;
+            border-left: 4px solid var(--brand);
+        }
+        .banner p + p { margin-top: 6px; }
+        .banner .btn { margin-top: 12px; }
+
+        /* Dépenses ponctuelles */
+        .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .stat { background: var(--surface); border-radius: 14px; padding: 12px 14px; }
+        .stat dt { font-size: 14px; color: var(--ink-2); }
+        .stat dd { font-family: var(--serif); font-weight: 700; font-size: 20px; }
+        .day { display: flex; justify-content: space-between; font-size: 15px; font-weight: 600; margin: 18px 4px 6px; }
+        .day span:first-child::first-letter { text-transform: uppercase; }
+
+        /* Plus */
+        .proj { background: var(--surface); border-radius: 14px; padding: 6px 14px; margin-top: 12px; }
+        .proj .kv { padding: 10px 0; }
+        .proj .kv + .kv { border-top: 1px solid var(--line); }
+        .proj .kv b { font-family: var(--serif); font-size: 18px; }
+        .stack { display: grid; gap: 8px; }
+        .inline-form { display: flex; gap: 8px; align-items: flex-end; }
+        .inline-form label.field { flex: 1; margin: 0; }
+
+        /* Barre d'onglets */
+        .tabbar {
+            position: fixed; left: 0; right: 0; bottom: 0; z-index: 5;
+            display: flex; justify-content: center;
+            background: var(--surface); border-top: 1px solid var(--line);
+        }
+        .tabbar div { display: flex; width: 100%; max-width: 560px; }
+        .tab {
+            flex: 1; min-height: 64px; padding: 8px 2px 10px;
+            display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+            background: none; border: none; cursor: pointer; color: var(--ink-2); font-size: 13px;
+        }
+        .tab svg { width: 24px; height: 24px; padding: 0 16px; box-sizing: content-box; border-radius: 12px; }
+        .tab[aria-current="page"] { color: var(--ink); font-weight: 600; }
+        .tab[aria-current="page"] svg { background: var(--brand-soft); }
+
+        /* Message éphémère */
+        .toast {
+            position: fixed; left: 16px; right: 16px; bottom: 80px; z-index: 6;
+            max-width: 528px; margin: 0 auto;
+            padding: 14px 16px; border-radius: 12px;
+            background: var(--ink); color: var(--paper);
+            box-shadow: 0 6px 20px rgba(0,0,0,.25);
+        }
+        .toast.error { background: var(--neg); color: #fff; }
+
+        /* Fiches d'édition (bas d'écran) */
+        dialog {
+            width: 100%; max-width: 560px; max-height: 92vh;
+            margin: auto auto 0; padding: 20px 16px 24px;
+            border: none; border-radius: 20px 20px 0 0;
+            background: var(--surface); color: var(--ink);
+        }
+        dialog::backdrop { background: rgba(0,0,0,.45); }
+        dialog h2 { margin-bottom: 16px; }
+        .seg { display: flex; border: 1px solid var(--ink-2); border-radius: 12px; overflow: hidden; margin-bottom: 14px; }
+        .seg label { flex: 1; }
+        .seg input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+        .seg span { display: grid; place-items: center; min-height: 48px; cursor: pointer; font-weight: 600; }
+        .seg input:checked + span { background: var(--brand); color: var(--on-brand); }
+        .seg input:focus-visible + span { outline: 3px solid var(--focus); outline-offset: -3px; }
+        .sheet-actions { display: flex; gap: 8px; margin-top: 8px; }
+        .sheet-actions .grow { flex: 1; }
+        fieldset { border: none; }
+    </style>
+</head>
+<body>
+<main>
+    <!-- ACCUEIL -->
+    <section id="home" class="view" aria-labelledby="t-home">
+        <h1 id="t-home" class="sr-only">MoneyTracker — accueil</h1>
+        <div class="hero">
+            <p class="hero-label">Patrimoine total</p>
+            <p class="hero-figure num" id="heroTotal"></p>
+            <div class="ribbon" id="ribbon" role="img"></div>
+            <dl class="flow">
+                <div><dt>Revenus / mois</dt><dd class="num pos" id="flowIn"></dd></div>
+                <div><dt>Charges / mois</dt><dd class="num neg" id="flowOut"></dd></div>
+                <div><dt>Net / mois</dt><dd class="num" id="flowNet"></dd></div>
+            </dl>
+            <p class="month-spent" id="monthSpent"></p>
+        </div>
+
+        <div class="block" id="notifBanner" hidden>
+            <div class="banner">
+                <p><b>La détection des paiements est désactivée.</b></p>
+                <p class="muted">Autorise MoneyTracker à lire les notifications pour voir ici chaque paiement par carte ou Google Wallet. Rien n'est envoyé hors du téléphone.</p>
+                <button type="button" class="btn" data-action="notif-settings">Autoriser la lecture</button>
+            </div>
+        </div>
+
+        <section class="block" id="pendingBlock" aria-labelledby="t-pending" hidden>
+            <div class="block-head"><h2 id="t-pending">À valider <span class="count" id="pendingCount"></span></h2></div>
+            <div id="pendingList"></div>
+        </section>
+
+        <form class="say block" id="sayForm">
+            <button type="button" class="icon-btn" id="micBtn" aria-label="Dicter une phrase">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+            </button>
+            <label class="sr-only" for="sayInput">Phrase à analyser</label>
+            <input type="text" id="sayInput" enterkeyhint="send" autocomplete="off" placeholder="loyer 800 sur N26">
+            <button type="submit" class="btn small">OK</button>
+        </form>
+        <p class="say-hint">Ex. : « loyer 800 sur N26 », « revenu salaire 2500 sur N26 », « compte Livret A 3000 ».</p>
+
+        <section class="block" aria-labelledby="t-byacc">
+            <div class="block-head"><h2 id="t-byacc">Par compte</h2></div>
+            <div id="accSummary"></div>
+        </section>
+    </section>
+
+    <!-- COMPTES -->
+    <section id="accounts" class="view" aria-labelledby="t-acc" hidden>
+        <div class="block block-head">
+            <h1 id="t-acc">Comptes</h1>
+            <button type="button" class="btn small" data-action="new" data-kind="account">Ajouter</button>
+        </div>
+        <ul class="list" id="accountsList"></ul>
+        <p class="muted" id="accHint" style="margin-top:10px">Touche un compte pour le modifier. Glisse ☰ pour changer l'ordre.</p>
+    </section>
+
+    <!-- MENSUEL -->
+    <section id="entries" class="view" aria-labelledby="t-ent" hidden>
+        <div class="block block-head">
+            <h1 id="t-ent">Mensuel</h1>
+            <button type="button" class="btn small" data-action="new" data-kind="entry">Ajouter</button>
+        </div>
+        <p class="muted" style="margin-bottom:12px">Ce qui revient chaque mois : salaire, loyer, abonnements.</p>
+        <div id="entriesList"></div>
+    </section>
+
+    <!-- DÉPENSES PONCTUELLES (retraits) -->
+    <section id="withdrawals" class="view" aria-labelledby="t-wd" hidden>
+        <div class="block block-head">
+            <h1 id="t-wd">Dépenses</h1>
+            <button type="button" class="btn small" data-action="new" data-kind="withdrawal">Ajouter</button>
+        </div>
+        <dl class="stats" id="wdStats"></dl>
+        <div id="wdList"></div>
+    </section>
+
+    <!-- PLUS -->
+    <section id="more" class="view" aria-labelledby="t-more" hidden>
+        <h1 id="t-more" class="block">Plus</h1>
+
+        <section class="block" aria-labelledby="t-sav">
+            <h2 id="t-sav">Épargne</h2>
+            <form class="inline-form" id="savForm" style="margin-top:12px">
+                <label class="field"><span>Épargne mensuelle (€)</span><input type="text" inputmode="decimal" id="savAmount" placeholder="0"></label>
+                <button type="submit" class="btn">Enregistrer</button>
+            </form>
+            <div class="proj" id="savResult"></div>
+            <p class="muted" style="margin-top:8px">Projection simple, sans intérêts.</p>
+        </section>
+
+        <section class="block" aria-labelledby="t-notif" id="notifSection" hidden>
+            <h2 id="t-notif">Détection des paiements</h2>
+            <div class="banner" style="margin-top:12px">
+                <p id="notifStatus"></p>
+                <p class="muted">Sur Android 13 et plus, si le réglage est grisé : Infos de l'appli MoneyTracker, menu ⋮, « Autoriser les paramètres restreints », puis réessaie.</p>
+                <button type="button" class="btn ghost" data-action="notif-settings">Ouvrir le réglage</button>
+            </div>
+        </section>
+
+        <section class="block" aria-labelledby="t-bak">
+            <h2 id="t-bak">Sauvegarde</h2>
+            <p class="muted" style="margin:6px 0 12px">Tes données restent sur ce téléphone. Exporte-les de temps en temps vers Google Drive.</p>
+            <div class="stack">
+                <button type="button" class="btn" data-action="export">Exporter les données</button>
+                <button type="button" class="btn ghost" data-action="import">Importer un fichier</button>
+            </div>
+            <input type="file" id="importFile" accept="application/json,.json" hidden>
+        </section>
+    </section>
+</main>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<nav class="tabbar" aria-label="Sections">
+    <div>
+        <button type="button" class="tab" data-tab="home" aria-current="page">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M4 11 12 4l8 7v9h-5v-6H9v6H4z"/></svg>Accueil</button>
+        <button type="button" class="tab" data-tab="accounts">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M3 9 12 4l9 5M5 10v8m4.67-8v8m4.66-8v8M19 10v8M3 20h18"/></svg>Comptes</button>
+        <button type="button" class="tab" data-tab="entries">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4m6-4v4"/></svg>Mensuel</button>
+        <button type="button" class="tab" data-tab="withdrawals">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6m-6 4h6"/></svg>Dépenses</button>
+        <button type="button" class="tab" data-tab="more">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>Plus</button>
+    </div>
+</nav>
+
+<!-- Fiche compte -->
+<dialog id="dlg-account" aria-labelledby="dlg-account-t">
+    <form>
+        <h2 id="dlg-account-t"></h2>
+        <label class="field"><span>Nom du compte</span><input name="name" required placeholder="N26, Livret A…"></label>
+        <label class="field"><span>Solde de départ (€)</span><input name="balance" inputmode="decimal" placeholder="0"></label>
+        <label class="field"><span>Étiquette (facultatif)</span><input name="tag" placeholder="Perso, Commun…"></label>
+        <div class="sheet-actions">
+            <button type="button" class="btn danger" data-action="delete">Supprimer</button>
+            <button type="button" class="btn ghost" data-action="close">Annuler</button>
+            <button type="submit" class="btn grow">Enregistrer</button>
+        </div>
+    </form>
+</dialog>
+
+<!-- Fiche entrée mensuelle -->
+<dialog id="dlg-entry" aria-labelledby="dlg-entry-t">
+    <form>
+        <h2 id="dlg-entry-t"></h2>
+        <fieldset class="seg">
+            <legend class="sr-only">Type</legend>
+            <label><input type="radio" name="type" value="depense" checked><span>Charge</span></label>
+            <label><input type="radio" name="type" value="revenu"><span>Revenu</span></label>
+        </fieldset>
+        <label class="field"><span>Libellé</span><input name="name" required placeholder="Loyer, Salaire…"></label>
+        <label class="field"><span>Montant par mois (€)</span><input name="amount" inputmode="decimal" required placeholder="0"></label>
+        <label class="field"><span>Compte</span><select name="accountId" required data-accounts></select></label>
+        <label class="field"><span>Étiquette (facultatif)</span><input name="tag" placeholder="Logement, Assurance…"></label>
+        <div class="sheet-actions">
+            <button type="button" class="btn danger" data-action="delete">Supprimer</button>
+            <button type="button" class="btn ghost" data-action="close">Annuler</button>
+            <button type="submit" class="btn grow">Enregistrer</button>
+        </div>
+    </form>
+</dialog>
+
+<!-- Fiche dépense ponctuelle -->
+<dialog id="dlg-withdrawal" aria-labelledby="dlg-withdrawal-t">
+    <form>
+        <h2 id="dlg-withdrawal-t"></h2>
+        <label class="field"><span>Montant (€)</span><input name="amount" inputmode="decimal" required placeholder="0"></label>
+        <label class="field"><span>Libellé (facultatif)</span><input name="name" placeholder="Courses, Essence…"></label>
+        <label class="field"><span>Compte débité</span><select name="accountId" required data-accounts></select></label>
+        <label class="field"><span>Date</span><input name="date" type="date" required></label>
+        <div class="sheet-actions">
+            <button type="button" class="btn danger" data-action="delete">Supprimer</button>
+            <button type="button" class="btn ghost" data-action="close">Annuler</button>
+            <button type="submit" class="btn grow">Enregistrer</button>
+        </div>
+    </form>
+</dialog>
+
+<script>
+    const KEY = 'moneyData';
+    // expenses = entrées mensuelles (charges ET revenus, champ type) ; withdrawals = dépenses ponctuelles datées.
+    // sourceAccounts mémorise le compte choisi pour chaque app source des paiements détectés.
+    let data = { accounts: [], expenses: [], savings: 0, withdrawals: [], sourceAccounts: {} };
+    const native = window.Bridge; // présent seulement dans l'app Android
+
+    const $ = id => document.getElementById(id);
+    const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const fmt = n => n.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+    const fmtS = n => (n > 0 ? '+' : n < 0 ? '−' : '') + fmt(Math.abs(n));
+    const cls = n => (n >= 0 ? 'pos' : 'neg');
+    const num = s => { const n = parseFloat(String(s ?? '').replace(/[\s  ]/g, '').replace(',', '.')); return isFinite(n) ? n : null; };
+    const isIncome = e => e.type === 'revenu';
+    const sumOf = (list, income) => list.filter(e => isIncome(e) === income).reduce((s, e) => s + e.amount, 0);
+    const todayISO = () => new Date().toLocaleDateString('sv-SE'); // AAAA-MM-JJ, heure locale
+    const accName = id => data.accounts.find(a => a.id === id)?.name || 'Sans compte';
+    const newId = () => Date.now() + Math.floor(Math.random() * 1000);
+
+    // ---------- Stockage ----------
+    function load() {
+        try {
+            const saved = JSON.parse(localStorage.getItem(KEY));
+            if (saved) data = { ...data, ...saved };
+        } catch (e) { /* données illisibles : on repart de zéro */ }
+        data.sourceAccounts ||= {};
+    }
+    function save() {
+        localStorage.setItem(KEY, JSON.stringify(data));
+        renderAll();
+    }
+
+    // ---------- Message éphémère ----------
+    let toastTimer;
+    function feedback(msg, isError = false) {
+        const el = $('toast');
+        el.textContent = msg;
+        el.className = 'toast' + (isError ? ' error' : '');
+        el.hidden = false;
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => el.hidden = true, 4500);
+    }
+
+    // ---------- Saisie vocale ----------
+    // Dans l'app : reconnaissance vocale d'Android (Bridge.listen). Sur le web : SpeechRecognition si dispo.
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let rec = null, listening = false;
+    const setListening = on => { listening = on; $('micBtn').classList.toggle('listening', on); };
+    window.onSpeech = text => { setListening(false); $('sayInput').value = text; handleInput(text); };
+    window.onSpeechError = msg => { setListening(false); feedback(msg, true); };
+    if (!native && SR) {
+        rec = new SR();
+        rec.lang = 'fr-FR';
+        rec.onstart = () => setListening(true);
+        rec.onresult = e => window.onSpeech(e.results[0][0].transcript);
+        rec.onerror = e => window.onSpeechError({
+            'no-speech': 'Rien entendu. Réessaie ou tape la phrase.',
+            'audio-capture': 'Micro introuvable.',
+            'network': 'Reconnaissance vocale indisponible hors ligne : tape la phrase.',
+            'not-allowed': 'Micro refusé : autorise-le dans les réglages du navigateur.'
+        }[e.error] || 'Erreur vocale : ' + e.error);
+        rec.onend = () => setListening(false);
+    } else if (!native) {
+        $('micBtn').hidden = true;
+    }
+    $('micBtn').onclick = () => {
+        if (native) { setListening(true); native.listen(); return; }
+        if (listening) return rec.stop();
+        try { rec.start(); } catch (e) { /* déjà en cours */ }
+    };
+
+    // ---------- Analyse de la phrase ----------
+    // Exemples : "loyer 800 sur N26 tag logement", "revenu salaire 2500 sur N26", "compte N26 1200"
+    const NUM = /-?\d+(?:[.,]\d+)?/;
+    const cap = s => s.replace(/(^|\s)\S/g, c => c.toUpperCase());
+    function parseInput(raw) {
+        let t = raw.toLowerCase().replace(/\s+/g, ' ').trim();
+
+        let tag = '';
+        const tm = t.match(/\btag (.+)$/);
+        if (tm) { tag = cap(tm[1].trim()); t = t.slice(0, tm.index).trim(); }
+
+        t = t.replace(/€|\beuros?\b/g, ' ').replace(/\s+/g, ' ').trim();
+        const nm = t.match(NUM);
+        const amount = nm ? parseFloat(nm[0].replace(',', '.')) : null;
+
+        // Compte
+        const accRe = /^(ajoute |ajouter |nouveau |nouvel )?compte\b/;
+        if (accRe.test(t)) {
+            const name = t.replace(accRe, '').replace(NUM, ' ').replace(/\s+/g, ' ').trim();
+            if (!name) return { error: 'Donne le nom du compte, par exemple : compte N26 1200' };
+            return { kind: 'account', name: cap(name), balance: amount || 0, tag };
+        }
+
+        // Entrée (charge ou revenu)
+        let type = 'depense';
+        if (/^revenu\b/.test(t)) { type = 'revenu'; t = t.replace(/^revenu\b/, ''); }
+        else t = t.replace(/^(d[ée]pense|charge|frais)\b/, '');
+        t = t.trim();
+
+        const acc = [...data.accounts]
+            .sort((a, b) => b.name.length - a.name.length)
+            .find(a => t.includes(a.name.toLowerCase()));
+
+        if (amount === null) return { error: 'Il manque le montant, par exemple : loyer 800 sur N26' };
+        if (!acc) return { error: data.accounts.length ? 'Précise un compte existant, par exemple : loyer 800 sur ' + data.accounts[0].name : 'Crée d\'abord un compte : compte N26 1200' };
+
+        const name = t.replace(acc.name.toLowerCase(), ' ')
+            .replace(NUM, ' ')
+            .replace(/\b(sur|avec|le|la|les|de|du|mon|ma|compte)\b/g, ' ')
+            .replace(/\s+/g, ' ').trim();
+        if (!name) return { error: 'Il manque le libellé, par exemple : loyer 800 sur N26' };
+
+        return { kind: 'entry', type, name: cap(name), amount: Math.abs(amount), accountId: acc.id, tag };
+    }
+
+    function handleInput(text) {
+        if (!text.trim()) return;
+        const r = parseInput(text);
+        if (r.error) return feedback(r.error, true);
+        if (r.kind === 'account') {
+            data.accounts.push({ id: newId(), name: r.name, balance: r.balance, tag: r.tag });
+            feedback(`Compte « ${r.name} » ajouté : ${fmt(r.balance)}`);
+        } else {
+            data.expenses.push({ id: newId(), name: r.name, amount: r.amount, type: r.type, accountId: r.accountId, tag: r.tag });
+            feedback(`${r.type === 'revenu' ? 'Revenu' : 'Charge'} « ${r.name} » ajouté : ${fmt(r.amount)} par mois`);
+        }
+        $('sayInput').value = '';
+        save();
+    }
+    $('sayForm').onsubmit = e => { e.preventDefault(); handleInput($('sayInput').value); };
+
+    // ---------- Onglets ----------
+    let currentTab = 'home';
+    function switchTab(name) {
+        currentTab = name;
+        document.querySelectorAll('.view').forEach(v => v.hidden = v.id !== name);
+        document.querySelectorAll('.tab').forEach(b => b.dataset.tab === name ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current'));
+        window.scrollTo(0, 0);
+    }
+    document.querySelectorAll('.tab').forEach(b => b.onclick = () => switchTab(b.dataset.tab));
+
+    // ---------- Fiches d'ajout / modification ----------
+    // Chaque fiche est un <dialog> dont les champs portent le nom du champ de l'objet stocké.
+    const KINDS = {
+        account: {
+            list: 'accounts', add: 'Nouveau compte', edit: 'Modifier le compte', done: 'Compte enregistré',
+            read: f => f.name.trim() ? { name: f.name.trim(), balance: num(f.balance) ?? 0, tag: f.tag.trim() } : 'Donne un nom au compte',
+            confirm: 'Supprimer ce compte et ses entrées mensuelles ?',
+            remove: id => { data.expenses = data.expenses.filter(e => e.accountId !== id); }
+        },
+        entry: {
+            list: 'expenses', add: 'Nouvelle entrée mensuelle', edit: 'Modifier l\'entrée', done: 'Entrée enregistrée',
+            read: f => {
+                const amount = num(f.amount), accountId = +f.accountId;
+                if (!f.name.trim() || !amount || !accountId) return 'Remplis le libellé, le montant et le compte';
+                return { name: f.name.trim(), amount: Math.abs(amount), type: f.type, accountId, tag: f.tag.trim() };
+            },
+            confirm: 'Supprimer cette entrée ?'
+        },
+        withdrawal: {
+            list: 'withdrawals', add: 'Nouvelle dépense', edit: 'Modifier la dépense', done: 'Dépense enregistrée',
+            read: f => {
+                const amount = num(f.amount), accountId = +f.accountId;
+                if (!amount || !accountId) return 'Indique le montant et le compte';
+                return { name: f.name.trim() || 'Dépense', amount: Math.abs(amount), accountId, date: f.date || todayISO() };
+            },
+            confirm: 'Supprimer cette dépense ?'
+        }
+    };
+    let editing = null; // { kind, id|null }
+
+    function openSheet(kind, id = null, preset = {}) {
+        const k = KINDS[kind], dlg = $('dlg-' + kind), form = dlg.querySelector('form');
+        const item = id === null ? { type: 'depense', date: todayISO(), ...preset } : data[k.list].find(x => x.id === id);
+        if (!item) return;
+        if (kind !== 'account' && !data.accounts.length) return feedback('Crée d\'abord un compte', true);
+        editing = { kind, id };
+        form.reset();
+        for (const el of form.elements) {
+            if (!el.name) continue;
+            const v = item[el.name] ?? '';
+            if (el.type === 'radio') el.checked = el.value === v;
+            else el.value = v;
+        }
+        if (kind !== 'account' && !form.elements.accountId.value) form.elements.accountId.value = data.accounts[0].id;
+        dlg.querySelector('h2').textContent = id === null ? k.add : k.edit;
+        dlg.querySelector('[data-action="delete"]').hidden = id === null;
+        dlg.showModal();
+        const first = form.querySelector('input:not([type=radio]), select');
+        if (id === null) first.focus();
+    }
+    function closeSheet() {
+        document.querySelector('dialog[open]')?.close();
+        editing = null;
+    }
+    document.querySelectorAll('dialog').forEach(dlg => {
+        const form = dlg.querySelector('form');
+        form.onsubmit = e => {
+            e.preventDefault();
+            const k = KINDS[editing.kind];
+            const vals = k.read(Object.fromEntries(new FormData(form)));
+            if (typeof vals === 'string') return feedback(vals, true);
+            if (editing.id === null) data[k.list].push({ id: newId(), ...vals });
+            else Object.assign(data[k.list].find(x => x.id === editing.id), vals);
+            feedback(k.done);
+            closeSheet();
+            save();
+        };
+        dlg.querySelector('[data-action="close"]').onclick = closeSheet;
+        dlg.querySelector('[data-action="delete"]').onclick = () => {
+            const k = KINDS[editing.kind], id = editing.id;
+            if (!confirm(k.confirm)) return;
+            data[k.list] = data[k.list].filter(x => x.id !== id);
+            k.remove?.(id);
+            closeSheet();
+            save();
+        };
+        dlg.addEventListener('close', () => editing = null);
+        // Toucher le fond ferme la fiche
+        dlg.addEventListener('click', e => { if (e.target === dlg) closeSheet(); });
+    });
+
+    // Retour Android : ferme la fiche, puis revient à l'accueil. Renvoie false si rien à faire.
+    window.onBack = () => {
+        if (document.querySelector('dialog[open]')) { closeSheet(); return true; }
+        if (currentTab !== 'home') { switchTab('home'); return true; }
+        return false;
+    };
+
+    // ---------- Rendu ----------
+    function balanceOf(a) {
+        return a.balance - data.withdrawals.filter(w => w.accountId === a.id).reduce((s, w) => s + w.amount, 0);
+    }
+    const color = i => i < 8 ? `var(--s${i + 1})` : 'var(--s-other)';
+
+    function renderHero() {
+        const balances = data.accounts.map(balanceOf);
+        const total = balances.reduce((s, b) => s + b, 0);
+        const [int, cents] = fmt(total).split(',');
+        $('heroTotal').innerHTML = `${esc(int)}<span class="cents">,${esc(cents)}</span>`;
+
+        // Répartition des soldes positifs ; au-delà de 8 comptes, le reste est regroupé.
+        const pos = data.accounts.map((a, i) => ({ a, i, b: balances[i] })).filter(x => x.b > 0);
+        const sumPos = pos.reduce((s, x) => s + x.b, 0);
+        $('ribbon').hidden = !sumPos;
+        $('ribbon').innerHTML = pos.map(x => `<span style="flex:${x.b / sumPos};background:${color(x.i)}"></span>`).join('');
+        $('ribbon').setAttribute('aria-label', 'Répartition : ' + pos.map(x => `${x.a.name} ${Math.round(x.b / sumPos * 100)} %`).join(', '));
+
+        const rev = sumOf(data.expenses, true), dep = sumOf(data.expenses, false), net = rev - dep;
+        $('flowIn').textContent = fmt(rev);
+        $('flowOut').textContent = fmt(dep);
+        $('flowNet').textContent = fmtS(net);
+        $('flowNet').className = 'num ' + cls(net);
+
+        const month = todayISO().slice(0, 7);
+        const spent = data.withdrawals.filter(w => w.date.startsWith(month)).reduce((s, w) => s + w.amount, 0);
+        $('monthSpent').innerHTML = spent
+            ? `Dépensé ce mois-ci : <b class="num neg">${fmt(spent)}</b>`
+            : '<span class="muted">Aucune dépense ponctuelle ce mois-ci.</span>';
+    }
+
+    function entryRows(list) {
+        return list.map(e => `
+            <div class="kv"><span>${esc(e.name)}${e.tag ? ` <span class="muted">${esc(e.tag)}</span>` : ''}</span>
+            <span class="num ${isIncome(e) ? 'pos' : 'neg'}">${isIncome(e) ? '+' : '−'}${fmt(e.amount)}</span></div>`).join('');
+    }
+    function accBlock(title, sub, balance, list, dotColor) {
+        const net = sumOf(list, true) - sumOf(list, false);
+        return `<li><details class="acc">
+            <summary class="row">
+                ${dotColor ? `<span class="dot" style="background:${dotColor}"></span>` : '<span class="dot"></span>'}
+                <span class="main"><span class="title">${esc(title)}</span>${sub ? `<span class="sub">${esc(sub)}</span>` : ''}</span>
+                ${balance !== null ? `<span class="amt num">${fmt(balance)}</span>` : ''}
+                <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+            </summary>
+            <div class="acc-body">
+                <div class="kv"><span>Net par mois</span><span class="num ${cls(net)}">${fmtS(net)}</span></div>
+                <div class="kv"><span>Net par an</span><span class="num ${cls(net)}">${fmtS(net * 12)}</span></div>
+                ${balance !== null ? `<div class="kv total"><span>Solde dans 1 an</span><span class="num">${fmt(balance + net * 12)}</span></div>` : ''}
+                <div class="entries">${entryRows(list) || '<p class="muted">Aucune entrée mensuelle.</p>'}</div>
+            </div>
+        </details></li>`;
+    }
+    function renderHome() {
+        renderHero();
+        let h = data.accounts.map((a, i) => accBlock(a.name, a.tag, balanceOf(a), data.expenses.filter(e => e.accountId === a.id), color(i))).join('');
+        const orphans = data.expenses.filter(e => !data.accounts.some(a => a.id === e.accountId));
+        if (orphans.length) h += accBlock('Sans compte', '', null, orphans);
+        $('accSummary').innerHTML = h ? `<ul class="list">${h}</ul>` : `
+            <div class="empty"><p>Ajoute ton premier compte pour commencer.</p>
+            <button type="button" class="btn" data-action="new" data-kind="account">Ajouter un compte</button></div>`;
+    }
+
+    function renderAccounts() {
+        $('accHint').hidden = data.accounts.length < 2;
+        $('accountsList').innerHTML = data.accounts.length
+            ? data.accounts.map((a, i) => `
+                <li class="acc-item${drag && drag.id === a.id ? ' dragging' : ''}" data-acc-id="${a.id}">
+                    <button type="button" class="handle" aria-label="Déplacer ${esc(a.name)} (flèches haut et bas)">☰</button>
+                    <button type="button" class="row" data-action="edit" data-kind="account" data-id="${a.id}">
+                        <span class="dot" style="background:${color(i)}"></span>
+                        <span class="main"><span class="title">${esc(a.name)}</span>${a.tag ? `<span class="sub">${esc(a.tag)}</span>` : ''}</span>
+                        <span class="amt num">${fmt(balanceOf(a))}</span>
+                    </button>
+                </li>`).join('')
+            : '<li class="empty">Aucun compte pour l\'instant.</li>';
+    }
+
+    // Réorganisation des comptes : glisser la poignée ☰ (doigt ou souris) ou flèches haut/bas au clavier.
+    let drag = null; // { id } du compte en cours de déplacement
+    function moveAccount(fromId, to) {
+        const from = data.accounts.findIndex(a => a.id === fromId);
+        if (to < 0 || to >= data.accounts.length || to === from) return false;
+        const [moved] = data.accounts.splice(from, 1);
+        data.accounts.splice(to, 0, moved);
+        return true;
+    }
+    $('accountsList').addEventListener('pointerdown', e => {
+        const handle = e.target.closest('.handle');
+        if (!handle) return;
+        drag = { id: +handle.closest('[data-acc-id]').dataset.accId };
+        renderAccounts();
+    });
+    $('accountsList').addEventListener('keydown', e => {
+        const handle = e.target.closest('.handle');
+        if (!handle || !['ArrowUp', 'ArrowDown'].includes(e.key)) return;
+        e.preventDefault();
+        const id = +handle.closest('[data-acc-id]').dataset.accId;
+        const idx = data.accounts.findIndex(a => a.id === id);
+        if (!moveAccount(id, idx + (e.key === 'ArrowUp' ? -1 : 1))) return;
+        save();
+        document.querySelector(`[data-acc-id="${id}"] .handle`).focus();
+    });
+    window.addEventListener('pointermove', e => {
+        if (!drag) return;
+        const over = document.elementFromPoint(e.clientX, e.clientY)?.closest('[data-acc-id]');
+        if (!over || +over.dataset.accId === drag.id) return;
+        if (moveAccount(drag.id, data.accounts.findIndex(a => a.id === +over.dataset.accId))) renderAccounts();
+    });
+    const endDrag = () => { if (!drag) return; drag = null; save(); };
+    window.addEventListener('pointerup', endDrag);
+    window.addEventListener('pointercancel', endDrag);
+
+    function renderEntries() {
+        if (!data.expenses.length) {
+            $('entriesList').innerHTML = `<div class="empty"><p>Aucune entrée mensuelle.</p>
+                <button type="button" class="btn" data-action="new" data-kind="entry">Ajouter une entrée</button></div>`;
+            return;
+        }
+        const group = (title, income) => {
+            const list = data.expenses.filter(e => isIncome(e) === income);
+            if (!list.length) return '';
+            return `<div class="day"><span>${title}</span><span class="num">${fmt(sumOf(list, income))} / mois</span></div>
+                <ul class="list">${list.map(e => `<li><button type="button" class="row" data-action="edit" data-kind="entry" data-id="${e.id}">
+                    <span class="main"><span class="title">${esc(e.name)}</span><span class="sub">${esc(accName(e.accountId))}${e.tag ? ' · ' + esc(e.tag) : ''}</span></span>
+                    <span class="amt num ${income ? 'pos' : 'neg'}">${income ? '+' : '−'}${fmt(e.amount)}</span>
+                </button></li>`).join('')}</ul>`;
+        };
+        $('entriesList').innerHTML = group('Revenus', true) + group('Charges', false);
+    }
+
+    function renderWithdrawals() {
+        const today = todayISO(), month = today.slice(0, 7), year = today.slice(0, 4);
+        const total = f => data.withdrawals.filter(w => f(w.date)).reduce((s, w) => s + w.amount, 0);
+        $('wdStats').innerHTML = [
+            ["Aujourd'hui", total(d => d === today)],
+            ['Ce mois-ci', total(d => d.startsWith(month))],
+            ['Cette année', total(d => d.startsWith(year))],
+            ['Depuis le début', total(() => true)]
+        ].map(([label, v]) => `<div class="stat"><dt>${label}</dt><dd class="num">${fmt(v)}</dd></div>`).join('');
+
+        // Historique regroupé par jour, le plus récent en premier
+        const days = [...new Set(data.withdrawals.map(w => w.date))].sort().reverse();
+        $('wdList').innerHTML = days.length ? days.map(day => {
+            const items = data.withdrawals.filter(w => w.date === day);
+            const label = new Date(day + 'T12:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: day.startsWith(year) ? undefined : 'numeric' });
+            return `<h2 class="day"><span>${label}</span><span class="num">${fmt(items.reduce((s, w) => s + w.amount, 0))}</span></h2>
+                <ul class="list">${items.map(w => `<li><button type="button" class="row" data-action="edit" data-kind="withdrawal" data-id="${w.id}">
+                    <span class="main"><span class="title">${esc(w.name)}</span><span class="sub">${esc(accName(w.accountId))}</span></span>
+                    <span class="amt num neg">−${fmt(w.amount)}</span>
+                </button></li>`).join('')}</ul>`;
+        }).join('') : '<div class="empty" style="margin-top:12px">Aucune dépense ponctuelle. Les paiements validés depuis l\'accueil arrivent ici.</div>';
+    }
+
+    function renderAccountSelects() {
+        const opts = data.accounts.map(a => `<option value="${a.id}">${esc(a.name)}${a.tag ? ' (' + esc(a.tag) + ')' : ''}</option>`).join('');
+        document.querySelectorAll('select[data-accounts]').forEach(sel => {
+            const current = sel.value;
+            sel.innerHTML = opts;
+            sel.value = current;
+        });
+    }
+
+    function renderSavings() {
+        const m = +data.savings || 0;
+        $('savResult').innerHTML = [['Dans 1 an', 1], ['Dans 5 ans', 5], ['Dans 10 ans', 10]]
+            .map(([label, y]) => `<div class="kv"><span>${label}</span><b class="num">${fmt(m * 12 * y)}</b></div>`).join('');
+    }
+
+    function renderAll() {
+        renderHome();
+        renderAccounts();
+        renderEntries();
+        renderAccountSelects();
+        renderSavings();
+        renderWithdrawals();
+        renderPending();
+    }
+
+    // Délégation des clics « ajouter / modifier / actions »
+    document.addEventListener('click', e => {
+        const b = e.target.closest('[data-action]');
+        if (!b || b.closest('dialog')) return;
+        const a = b.dataset.action;
+        if (a === 'new') openSheet(b.dataset.kind);
+        else if (a === 'edit') openSheet(b.dataset.kind, +b.dataset.id);
+        else if (a === 'export') exportData();
+        else if (a === 'import') $('importFile').click();
+        else if (a === 'notif-settings') native?.openNotifSettings();
+        else if (a === 'pay-ok') validatePayment(b.dataset.id);
+        else if (a === 'pay-no') rejectPayment(b.dataset.id);
+    });
+
+    $('savForm').onsubmit = e => {
+        e.preventDefault();
+        data.savings = num($('savAmount').value) || 0;
+        feedback('Épargne enregistrée');
+        save();
+    };
+
+    // ---------- Paiements détectés (app Android) ----------
+    // Le service natif lit les notifications des apps bancaires et garde en attente { id, amount, merchant, source, time }.
+    // Rien n'entre dans les comptes sans validation : on choisit le compte, puis la dépense est créée.
+    let pending = [];
+    function loadPending() {
+        if (!native) return;
+        try { pending = JSON.parse(native.pendingPayments()); } catch (e) { pending = []; }
+        renderPending();
+        const granted = native.hasNotifAccess();
+        $('notifBanner').hidden = granted;
+        $('notifSection').hidden = false;
+        $('notifStatus').innerHTML = granted
+            ? '<b>Activée.</b> Les paiements détectés apparaissent sur l\'accueil, à valider.'
+            : '<b>Désactivée.</b> Autorise la lecture des notifications pour détecter les paiements.';
+    }
+    window.onPaymentsChanged = loadPending;
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) loadPending(); });
+
+    function renderPending() {
+        $('pendingBlock').hidden = !pending.length;
+        $('pendingCount').textContent = pending.length;
+        const opts = data.accounts.map(a => `<option value="${a.id}">${esc(a.name)}</option>`).join('');
+        $('pendingList').innerHTML = pending.map(p => {
+            const when = new Date(p.time);
+            const day = when.toLocaleDateString('sv-SE') === todayISO() ? 'aujourd\'hui' : 'le ' + when.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+            const id = esc(p.id);
+            return `<article class="ticket" aria-label="Paiement de ${fmt(p.amount)}">
+                <div class="ticket-top">
+                    <span class="ticket-amt num">−${fmt(p.amount)}</span>
+                    <span class="muted">${esc(p.source)}, ${day} à ${when.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
+                </div>
+                <div class="fields">
+                    <label class="field"><span>Libellé</span><input id="pn-${id}" value="${esc(p.merchant)}" placeholder="Commerçant"></label>
+                    ${data.accounts.length ? `<label class="field"><span>Compte</span><select id="pa-${id}">${opts}</select></label>` : '<p class="muted">Crée d\'abord un compte.</p>'}
+                </div>
+                <div class="actions">
+                    <button type="button" class="btn ghost" data-action="pay-no" data-id="${id}">Ignorer</button>
+                    <button type="button" class="btn" data-action="pay-ok" data-id="${id}" ${data.accounts.length ? '' : 'disabled'}>Ajouter la dépense</button>
+                </div>
+            </article>`;
+        }).join('');
+        // Présélectionne le dernier compte choisi pour cette app source
+        pending.forEach(p => {
+            const sel = $('pa-' + p.id), last = data.sourceAccounts[p.source];
+            if (sel && data.accounts.some(a => a.id === last)) sel.value = last;
+        });
+    }
+    function validatePayment(id) {
+        const p = pending.find(x => x.id === id);
+        const accountId = +$('pa-' + id)?.value;
+        if (!p || !accountId) return;
+        const name = $('pn-' + id).value.trim() || 'Paiement';
+        data.withdrawals.push({ id: newId(), name, amount: p.amount, accountId, date: new Date(p.time).toLocaleDateString('sv-SE') });
+        data.sourceAccounts[p.source] = accountId;
+        save(); // enregistre d'abord, puis retire de la file : pas de perte si l'app s'arrête entre les deux
+        native.ack(id);
+        loadPending();
+        feedback(`Dépense de ${fmt(p.amount)} ajoutée à ${accName(accountId)}`);
+    }
+    function rejectPayment(id) {
+        native.ack(id);
+        loadPending();
+        feedback('Paiement ignoré');
+    }
+
+    // ---------- Sauvegarde (fichier JSON à mettre sur Drive) ----------
+    function exportData() {
+        const name = 'moneytracker-' + todayISO() + '.json', json = JSON.stringify(data, null, 2);
+        if (native) return native.saveFile(name, json); // sélecteur de fichier Android
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
+        a.download = name;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+    }
+    $('importFile').onchange = async e => {
+        const file = e.target.files[0];
+        if (!file) return;
+        try {
+            const obj = JSON.parse(await file.text());
+            if (!Array.isArray(obj.accounts) || !Array.isArray(obj.expenses)) throw new Error('format');
+            if (confirm('Remplacer toutes les données actuelles par ce fichier ?')) {
+                data = { accounts: obj.accounts, expenses: obj.expenses, savings: obj.savings || 0, withdrawals: obj.withdrawals || [], sourceAccounts: obj.sourceAccounts || {} };
+                feedback('Données importées');
+                save();
+            }
+        } catch (err) {
+            feedback('Ce fichier n\'est pas une sauvegarde MoneyTracker.', true);
+        }
+        e.target.value = '';
+    };
+
+    // ---------- Notification transmise par URL (version web) ----------
+    // Ouvert avec ?notif=<texte> (ex. via MacroDroid) : pré-remplit une dépense.
+    // ponytail: formats de banques variés, l'utilisateur vérifie et choisit le compte avant d'enregistrer.
+    function fromNotif(text) {
+        const am = text.match(/(\d[\d\s.]*(?:[.,]\d{1,2})?)\s*(?:€|eur)/i) || text.match(/(?:€|eur)\s*(\d[\d\s.]*(?:[.,]\d{1,2})?)/i);
+        if (!am) return feedback('Montant introuvable dans la notification', true);
+        const amount = num(am[1].replace(/\.(?=\d{3})/g, ''));
+        const mm = text.match(/(?:^|\s)(?:chez|à|at|to|vers)\s+(.+?)(?:\s+le\s+\d|[.,;:!]|$)/i);
+        switchTab('withdrawals');
+        openSheet('withdrawal', null, { amount, name: mm ? mm[1].trim() : '' });
+        feedback('Paiement détecté : vérifie le compte puis enregistre');
+    }
+
+    // ---------- Init ----------
+    load();
+    $('savAmount').value = data.savings || '';
+    renderAll();
+    loadPending();
+    const notif = new URLSearchParams(location.search).get('notif');
+    if (notif) { fromNotif(notif); history.replaceState(null, '', location.pathname); }
+    if (location.protocol === 'https:' && 'serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+</script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Mêmes valeurs que --paper et --brand dans assets/index.html -->
+    <color name="paper">#EEF2EF</color>
+    <color name="brand">#0E5A48</color>
+</resources>
