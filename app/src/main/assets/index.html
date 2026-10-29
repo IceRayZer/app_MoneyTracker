@@ -597,7 +597,7 @@
         account: {
             list: 'accounts', add: 'Nouveau compte', edit: 'Modifier le compte', done: 'Compte enregistré',
             read: f => f.name.trim() ? { name: f.name.trim(), balance: num(f.balance) ?? 0, tag: f.tag.trim() } : 'Donne un nom au compte',
-            confirm: 'Supprimer ce compte et ses entrées mensuelles ?',
+            confirm: 'Supprimer ce compte et ses entrées mensuelles ? Ses dépenses passées restent dans l\'historique.',
             remove: id => { data.expenses = data.expenses.filter(e => e.accountId !== id); }
         },
         entry: {
@@ -607,7 +607,7 @@
                 if (!f.name.trim() || !amount || !accountId) return 'Remplis le libellé, le montant et le compte';
                 return { name: f.name.trim(), amount: Math.abs(amount), type: f.type, accountId, tag: f.tag.trim() };
             },
-            confirm: 'Supprimer cette entrée ?'
+            confirm: 'Supprimer cette entrée mensuelle ?'
         },
         withdrawal: {
             list: 'withdrawals', add: 'Nouvelle dépense', edit: 'Modifier la dépense', done: 'Dépense enregistrée',
@@ -616,7 +616,7 @@
                 if (!amount || !accountId) return 'Indique le montant et le compte';
                 return { name: f.name.trim() || 'Dépense', amount: Math.abs(amount), accountId, date: f.date || todayISO() };
             },
-            confirm: 'Supprimer cette dépense ?'
+            confirm: 'Supprimer cette dépense ? Le solde du compte remontera d\'autant.'
         }
     };
     let editing = null; // { kind, id|null }
