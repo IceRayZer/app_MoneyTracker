@@ -99,3 +99,10 @@ Test de l'analyse : fonction pure, testée avec des phrases d'exemple (le plus s
 - Code minimal, sans bibliothèque superflue. Tout choix simplifié doit être signalé en commentaire avec son plafond.
 - Ne jamais inventer un résultat de test : si quelque chose n'a pas tourné, le dire.
 - Ne rien pousser sans que l'accès GitHub soit confirmé.
+
+## 11. État (29/10/2026)
+
+- Étapes 1 à 7 faites : interface refaite (`app/src/main/assets/index.html`, axe-core 0 violation WCAG 2.2 AA), projet Android Kotlin, `parsePayment` + 18 tests JUnit, pont JS, workflows Android (tests + APK release non signé à chaque push, APK signé + Release sur tag `v*`) et Pages, `README.md`.
+- Push GitHub : fonctionne. Compilation : faite par GitHub Actions (le SDK reste bloqué dans l'environnement Claude).
+- Apps surveillées : Google Wallet (+ services Google Play), Caisse d'Épargne (`com.caisseepargne.android.mobilebanking`), N26. À compléter selon les banques de l'utilisateur.
+- Reste à faire par l'utilisateur : secrets de signature, premier tag, test sur le téléphone, exemples réels de notifications pour affiner l'extraction.
