@@ -266,6 +266,9 @@
         .seg input:focus-visible + span { outline: 3px solid var(--focus); outline-offset: -3px; }
         .sheet-actions { display: flex; gap: 8px; margin-top: 8px; }
         .sheet-actions .grow { flex: 1; }
+        .sync-peers { margin: 14px 0; border: 1px solid var(--line); }
+        .sync-peers:empty { display: none; }
+        .sync-status { margin: 14px 0; font-weight: 600; min-height: 1.45em; }
         fieldset { border: none; }
     </style>
 </head>
@@ -368,6 +371,12 @@
             </div>
         </section>
 
+        <section class="block" aria-labelledby="t-sync" id="syncSection" hidden>
+            <h2 id="t-sync">Autre téléphone</h2>
+            <p class="muted" style="margin:6px 0 12px">Mets tes deux téléphones à jour l'un avec l'autre en Bluetooth, sans internet.</p>
+            <button type="button" class="btn" data-action="sync-open">Synchroniser</button>
+        </section>
+
         <section class="block" aria-labelledby="t-bak">
             <h2 id="t-bak">Sauvegarde</h2>
             <p class="muted" style="margin:6px 0 12px">Tes données restent sur ce téléphone. Exporte-les de temps en temps vers Google Drive.</p>
@@ -449,11 +458,24 @@
     </form>
 </dialog>
 
+<!-- Synchro avec un autre téléphone -->
+<dialog id="dlg-sync" aria-labelledby="dlg-sync-t">
+    <h2 id="dlg-sync-t">Synchroniser deux téléphones</h2>
+    <p class="muted">Ouvre cet écran sur les deux téléphones, puis touche le nom de l'autre sur l'un des deux. Les téléphones doivent d'abord être jumelés en Bluetooth (une seule fois).</p>
+    <ul class="list sync-peers" id="syncPeers"></ul>
+    <p class="sync-status" id="syncStatus" role="status" aria-live="polite"></p>
+    <div class="sheet-actions">
+        <button type="button" class="btn ghost" data-action="sync-bt">Réglages Bluetooth</button>
+        <button type="button" class="btn grow" data-action="sync-close">Fermer</button>
+    </div>
+</dialog>
+
 <script>
     const KEY = 'moneyData';
     // expenses = entrées mensuelles (charges ET revenus, champ type) ; withdrawals = dépenses ponctuelles datées.
     // sourceAccounts mémorise le compte choisi pour chaque app source des paiements détectés.
-    let data = { accounts: [], expenses: [], savings: 0, withdrawals: [], sourceAccounts: {} };
+    // updatedAt (sur chaque élément) et savingsAt servent à la synchro entre téléphones ; deleted garde la trace des suppressions.
+    let data = { accounts: [], expenses: [], savings: 0, savingsAt: 0, withdrawals: [], sourceAccounts: {}, deleted: {} };
     const native = window.Bridge; // présent seulement dans l'app Android
 
     const $ = id => document.getElementById(id);
@@ -468,6 +490,74 @@
     const accName = id => data.accounts.find(a => a.id === id)?.name || 'Sans compte';
     const newId = () => Date.now() + Math.floor(Math.random() * 1000);
 
+    // <merge>
+    // Fusion de deux jeux de données pour la synchro entre téléphones. Fonction pure (ni écran, ni stockage).
+    // Règles : même id => le plus récent (updatedAt) gagne ; une suppression est une « pierre tombale » horodatée ;
+    // deux comptes de même nom sont le même compte (chaque téléphone a pu le créer de son côté).
+    // ponytail: suppose les horloges des deux téléphones à l'heure (réseau mobile) ; l'ordre des comptes n'est pas synchronisé.
+    const TOMB = { account: 'a', entry: 'e', withdrawal: 'w' };
+    function mergeData(local, remote) {
+        const clone = x => JSON.parse(JSON.stringify(x));
+        const norm = d => {
+            d = clone(d);
+            for (const k of ['accounts', 'expenses', 'withdrawals']) d[k] = (d[k] || []).map(x => ({ ...x, updatedAt: x.updatedAt || 0 }));
+            d.deleted ||= {}; d.sourceAccounts ||= {}; d.savings ||= 0; d.savingsAt ||= 0;
+            return d;
+        };
+        const a = norm(local), b = norm(remote);
+
+        // 1. Comptes jumeaux (même nom, ids différents) : les deux côtés adoptent le plus petit id.
+        const rename = {};
+        const byName = new Map(a.accounts.map(x => [x.name.trim().toLowerCase(), x]));
+        for (const rb of b.accounts) {
+            const ra = byName.get(rb.name.trim().toLowerCase());
+            if (ra && ra.id !== rb.id) rename[ra.id] = rename[rb.id] = Math.min(ra.id, rb.id);
+        }
+        const fix = id => rename[id] ?? id;
+        for (const d of [a, b]) {
+            d.accounts.forEach(x => x.id = fix(x.id));
+            [...d.expenses, ...d.withdrawals].forEach(x => x.accountId = fix(x.accountId));
+            d.sourceAccounts = Object.fromEntries(Object.entries(d.sourceAccounts).map(([k, v]) => [k, fix(v)]));
+            d.deleted = Object.fromEntries(Object.entries(d.deleted).map(([k, t]) => [k.startsWith('a:') ? 'a:' + fix(+k.slice(2)) : k, t]));
+        }
+
+        // 2. Union par id : le plus récent gagne ; à égalité, le contenu le plus grand par ordre alphabétique,
+        //    pour que les deux téléphones tranchent pareil.
+        const pick = (x, y) => !x ? y : x.updatedAt !== y.updatedAt ? (x.updatedAt > y.updatedAt ? x : y)
+            : (JSON.stringify(x) >= JSON.stringify(y) ? x : y);
+        const deleted = { ...a.deleted };
+        for (const [k, t] of Object.entries(b.deleted)) deleted[k] = Math.max(deleted[k] ?? 0, t);
+        const stats = { added: 0, changed: 0, removed: 0 };
+        const union = (kind, la, lb) => {
+            const m = new Map(la.map(x => [x.id, x]));
+            for (const y of lb) m.set(y.id, pick(m.get(y.id), y));
+            // Un élément supprimé reste supprimé, sauf s'il a été modifié après la suppression.
+            const out = [...m.values()].filter(x => (deleted[TOMB[kind] + ':' + x.id] ?? -1) < x.updatedAt);
+            const before = new Map(la.map(x => [x.id, JSON.stringify(x)]));
+            for (const x of out) {
+                if (!before.has(x.id)) stats.added++;
+                else if (before.get(x.id) !== JSON.stringify(x)) stats.changed++;
+            }
+            const kept = new Set(out.map(x => x.id));
+            stats.removed += la.filter(x => !kept.has(x.id)).length;
+            return out;
+        };
+
+        // Épargne : la plus récente gagne ; à égalité (anciennes données), la plus grande, pour que les deux téléphones tranchent pareil.
+        const newer = b.savingsAt !== a.savingsAt ? (b.savingsAt > a.savingsAt ? b : a) : (b.savings > a.savings ? b : a);
+        return {
+            data: {
+                accounts: union('account', a.accounts, b.accounts),
+                expenses: union('entry', a.expenses, b.expenses),
+                withdrawals: union('withdrawal', a.withdrawals, b.withdrawals),
+                savings: newer.savings, savingsAt: newer.savingsAt, deleted,
+                sourceAccounts: { ...b.sourceAccounts, ...a.sourceAccounts }
+            },
+            stats
+        };
+    }
+    // </merge>
+
     // ---------- Stockage ----------
     function load() {
         try {
@@ -475,6 +565,7 @@
             if (saved) data = { ...data, ...saved };
         } catch (e) { /* données illisibles : on repart de zéro */ }
         data.sourceAccounts ||= {};
+        data.deleted ||= {};
     }
     function save() {
         localStorage.setItem(KEY, JSON.stringify(data));
@@ -570,10 +661,10 @@
         const r = parseInput(text);
         if (r.error) return feedback(r.error, true);
         if (r.kind === 'account') {
-            data.accounts.push({ id: newId(), name: r.name, balance: r.balance, tag: r.tag });
+            data.accounts.push({ id: newId(), name: r.name, balance: r.balance, tag: r.tag, updatedAt: Date.now() });
             feedback(`Compte « ${r.name} » ajouté : ${fmt(r.balance)}`);
         } else {
-            data.expenses.push({ id: newId(), name: r.name, amount: r.amount, type: r.type, accountId: r.accountId, tag: r.tag });
+            data.expenses.push({ id: newId(), name: r.name, amount: r.amount, type: r.type, accountId: r.accountId, tag: r.tag, updatedAt: Date.now() });
             feedback(`${r.type === 'revenu' ? 'Revenu' : 'Charge'} « ${r.name} » ajouté : ${fmt(r.amount)} par mois`);
         }
         $('sayInput').value = '';
@@ -598,7 +689,10 @@
             list: 'accounts', add: 'Nouveau compte', edit: 'Modifier le compte', done: 'Compte enregistré',
             read: f => f.name.trim() ? { name: f.name.trim(), balance: num(f.balance) ?? 0, tag: f.tag.trim() } : 'Donne un nom au compte',
             confirm: 'Supprimer ce compte et ses entrées mensuelles ? Ses dépenses passées restent dans l\'historique.',
-            remove: id => { data.expenses = data.expenses.filter(e => e.accountId !== id); }
+            remove: id => {
+                data.expenses.filter(e => e.accountId === id).forEach(e => data.deleted['e:' + e.id] = Date.now());
+                data.expenses = data.expenses.filter(e => e.accountId !== id);
+            }
         },
         entry: {
             list: 'expenses', add: 'Nouvelle entrée mensuelle', edit: 'Modifier l\'entrée', done: 'Entrée enregistrée',
@@ -647,11 +741,13 @@
     }
     document.querySelectorAll('dialog').forEach(dlg => {
         const form = dlg.querySelector('form');
+        if (!form) return; // fiche sans formulaire (synchro) : gérée plus bas
         form.onsubmit = e => {
             e.preventDefault();
             const k = KINDS[editing.kind];
             const vals = k.read(Object.fromEntries(new FormData(form)));
             if (typeof vals === 'string') return feedback(vals, true);
+            vals.updatedAt = Date.now();
             if (editing.id === null) data[k.list].push({ id: newId(), ...vals });
             else Object.assign(data[k.list].find(x => x.id === editing.id), vals);
             feedback(k.done);
@@ -663,6 +759,7 @@
             const k = KINDS[editing.kind], id = editing.id;
             if (!confirm(k.confirm)) return;
             data[k.list] = data[k.list].filter(x => x.id !== id);
+            data.deleted[TOMB[editing.kind] + ':' + id] = Date.now();
             k.remove?.(id);
             closeSheet();
             save();
@@ -869,6 +966,7 @@
         else if (a === 'export') exportData();
         else if (a === 'import') $('importFile').click();
         else if (a === 'notif-settings') native?.openNotifSettings();
+        else if (a === 'sync-open') syncOpen();
         else if (a === 'pay-ok') validatePayment(b.dataset.id);
         else if (a === 'pay-no') rejectPayment(b.dataset.id);
     });
@@ -876,6 +974,7 @@
     $('savForm').onsubmit = e => {
         e.preventDefault();
         data.savings = num($('savAmount').value) || 0;
+        data.savingsAt = Date.now();
         feedback('Épargne enregistrée');
         save();
     };
@@ -936,7 +1035,8 @@
         const accountId = +$('pa-' + id)?.value;
         if (!p || !accountId) return;
         const name = $('pn-' + id).value.trim() || 'Paiement';
-        data.withdrawals.push({ id: newId(), name, amount: p.amount, accountId, date: new Date(p.time).toLocaleDateString('sv-SE') });
+        // nt = heure de la notification : sert à repérer ce même paiement sur l'autre téléphone (voir onSyncData)
+        data.withdrawals.push({ id: newId(), name, amount: p.amount, accountId, date: new Date(p.time).toLocaleDateString('sv-SE'), updatedAt: Date.now(), nt: p.time });
         data.sourceAccounts[p.source] = accountId;
         save(); // enregistre d'abord, puis retire de la file : pas de perte si l'app s'arrête entre les deux
         native.ack(id);
@@ -965,12 +1065,15 @@
         const n = v => { const x = Number(v); if (!isFinite(x)) throw new Error('nombre'); return x; };
         const str = v => String(v ?? '');
         const day = v => { if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) throw new Error('date'); return v; };
+        const t = v => Number(v) || 0; // horodatage : 0 si absent (anciennes sauvegardes)
         if (!Array.isArray(obj.accounts) || !Array.isArray(obj.expenses)) throw new Error('format');
         return {
-            accounts: obj.accounts.map(a => ({ id: n(a.id), name: str(a.name), balance: n(a.balance ?? 0), tag: str(a.tag) })),
-            expenses: obj.expenses.map(e => ({ id: n(e.id), name: str(e.name), amount: n(e.amount), type: e.type === 'revenu' ? 'revenu' : 'depense', accountId: n(e.accountId), tag: str(e.tag) })),
+            accounts: obj.accounts.map(a => ({ id: n(a.id), name: str(a.name), balance: n(a.balance ?? 0), tag: str(a.tag), updatedAt: t(a.updatedAt) })),
+            expenses: obj.expenses.map(e => ({ id: n(e.id), name: str(e.name), amount: n(e.amount), type: e.type === 'revenu' ? 'revenu' : 'depense', accountId: n(e.accountId), tag: str(e.tag), updatedAt: t(e.updatedAt) })),
             savings: +obj.savings || 0,
-            withdrawals: (obj.withdrawals || []).map(w => ({ id: n(w.id), name: str(w.name), amount: n(w.amount), accountId: n(w.accountId), date: day(w.date) })),
+            savingsAt: t(obj.savingsAt),
+            deleted: Object.fromEntries(Object.entries(obj.deleted || {}).filter(([k, v]) => /^[aew]:\d+$/.test(k) && isFinite(v)).map(([k, v]) => [k, +v])),
+            withdrawals: (obj.withdrawals || []).map(w => ({ id: n(w.id), name: str(w.name), amount: n(w.amount), accountId: n(w.accountId), date: day(w.date), updatedAt: t(w.updatedAt), ...(w.nt ? { nt: t(w.nt) } : {}) })),
             sourceAccounts: Object.fromEntries(Object.entries(obj.sourceAccounts || {}).map(([k, v]) => [str(k), n(v)]))
         };
     }
@@ -1004,8 +1107,74 @@
         feedback('Paiement détecté : vérifie le compte puis enregistre');
     }
 
+    // ---------- Synchro avec un autre téléphone (Bluetooth, sans internet) ----------
+    // Le natif ne fait que transporter le JSON ; la fusion se fait ici (mergeData). Les deux téléphones ouvrent cet écran :
+    // chacun attend (syncHost) ; celui où l'on touche le nom de l'autre se connecte (syncConnect). L'autre doit accepter.
+    const syncDlg = $('dlg-sync');
+    const syncSay = t => $('syncStatus').textContent = t;
+    const plur = (n, w) => `${n} ${w}${n > 1 ? 's' : ''}`;
+    const SYNC_MSG = {
+        permission: 'Autorise « Appareils à proximité » pour synchroniser.',
+        off: 'Active le Bluetooth, puis rouvre cet écran.',
+        unsupported: 'Ce téléphone n\'a pas de Bluetooth.',
+        refused: 'L\'autre téléphone a refusé la synchronisation.',
+        failed: 'La synchronisation a échoué. Vérifie que l\'autre téléphone affiche aussi cet écran, puis réessaie.'
+    };
+    function syncOpen() {
+        syncDlg.showModal();
+        syncLoad();
+    }
+    function syncLoad() {
+        const r = JSON.parse(native.syncPeers());
+        $('syncPeers').innerHTML = '';
+        if (r.error) return syncSay(SYNC_MSG[r.error]);
+        $('syncPeers').innerHTML = r.devices.map(d => `<li><button type="button" class="row" data-action="sync-go" data-address="${esc(d.address)}">
+            <span class="main"><span class="title">${esc(d.name)}</span><span class="sub">Se connecter à ce téléphone</span></span></button></li>`).join('');
+        syncArm(r.devices.length ? '' : 'Aucun appareil jumelé. Jumelle d\'abord les deux téléphones dans les réglages Bluetooth.');
+    }
+    function syncArm(msg) {
+        native.syncHost(JSON.stringify(data)); // ce téléphone attend l'autre
+        syncSay(msg ?? '');
+    }
+    syncDlg.addEventListener('click', e => {
+        if (e.target === syncDlg) return syncDlg.close();
+        const b = e.target.closest('[data-action]');
+        if (!b) return;
+        if (b.dataset.action === 'sync-close') syncDlg.close();
+        else if (b.dataset.action === 'sync-bt') native.openBluetoothSettings();
+        else if (b.dataset.action === 'sync-go') { syncSay('Connexion…'); native.syncConnect(b.dataset.address, JSON.stringify(data)); }
+    });
+    syncDlg.addEventListener('close', () => native?.syncCancel());
+
+    // Rappels du natif
+    window.onSyncPermission = ok => ok ? syncLoad() : syncSay(SYNC_MSG.permission);
+    window.onSyncStatus = code => syncSay({ connecting: 'Connexion…', waiting: 'En attente de l\'accord de l\'autre téléphone…', transfer: 'Transfert en cours…' }[code] || '');
+    window.onSyncPeer = name => {
+        syncSay('Demande de synchronisation…');
+        native.syncApprove(confirm(`« ${name} » veut se synchroniser avec ce téléphone : vos données seront fusionnées. Accepter ?`));
+    };
+    window.onSyncError = code => syncArm(SYNC_MSG[code] || SYNC_MSG.failed);
+    window.onSyncData = (json, peer) => {
+        let remote;
+        try { remote = cleanBackup(JSON.parse(json)); } // données venues d'un autre appareil : revalidées comme un import
+        catch (e) { return syncArm('Les données reçues sont illisibles.'); }
+        const { data: merged, stats } = mergeData(data, remote);
+        data = merged;
+        // Un paiement déjà validé sur l'autre téléphone ne doit pas l'être une 2e fois ici : on le retire de « À valider ».
+        // (seulement par rapport aux dépenses reçues de l'autre téléphone, avec la même heure de notification à 90 s près)
+        const dups = pending.filter(p => remote.withdrawals.some(w => w.nt && w.amount === p.amount && Math.abs(w.nt - p.time) < 90000));
+        dups.forEach(p => native.ack(p.id));
+        $('savAmount').value = data.savings || '';
+        save();
+        loadPending();
+        $('syncPeers').innerHTML = '';
+        syncSay(`Synchronisé avec « ${peer} » : ${plur(stats.added, 'ajout')}, ${plur(stats.changed, 'modification')}, ${plur(stats.removed, 'suppression')}.`
+            + (dups.length ? ` ${plur(dups.length, 'paiement')} déjà validé${dups.length > 1 ? 's' : ''} sur l'autre téléphone ${dups.length > 1 ? 'ont été retirés' : 'a été retiré'} de « À valider ».` : ''));
+    };
+
     // ---------- Init ----------
     load();
+    $('syncSection').hidden = !native;
     $('savAmount').value = data.savings || '';
     renderAll();
     loadPending();

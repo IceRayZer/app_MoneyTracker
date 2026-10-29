@@ -38,6 +38,27 @@ class Bridge(private val activity: MainActivity) {
     @JavascriptInterface
     fun saveFile(name: String, content: String) = activity.runOnUiThread { activity.exportFile(name, content) }
 
+    // ---- Synchro avec un autre téléphone (Bluetooth) : voir BluetoothSync ----
+    @JavascriptInterface
+    fun syncPeers(): String = activity.sync.peers()
+
+    @JavascriptInterface
+    fun syncHost(payload: String) = activity.sync.host(payload)
+
+    @JavascriptInterface
+    fun syncConnect(address: String, payload: String) = activity.sync.connect(address, payload)
+
+    @JavascriptInterface
+    fun syncApprove(ok: Boolean) = activity.sync.approve(ok)
+
+    @JavascriptInterface
+    fun syncCancel() = activity.sync.cancel()
+
+    @JavascriptInterface
+    fun openBluetoothSettings() = activity.runOnUiThread {
+        activity.startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS))
+    }
+
     /** Reconnaissance vocale d'Android ; le résultat revient par `window.onSpeech(texte)`. */
     @JavascriptInterface
     fun listen() = activity.runOnUiThread { activity.listen() }

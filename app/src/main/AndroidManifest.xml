@@ -2,6 +2,11 @@
 <!-- Pas de permission INTERNET : l'app ne peut rien envoyer hors du téléphone. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- Synchro entre téléphones : Bluetooth uniquement (appareils déjà jumelés), jamais de réseau. -->
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
+
     <application
         android:allowBackup="false"
         android:enableOnBackInvokedCallback="true"
