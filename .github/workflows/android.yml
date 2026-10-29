@@ -21,8 +21,8 @@ jobs:
           distribution: temurin
           java-version: 17
       - uses: gradle/actions/setup-gradle@v5
-      - name: Tests et APK de contrôle
-        run: ./gradlew --no-daemon test assembleDebug -PversionCode=${{ github.run_number }}
+      - name: Tests et APK de contrôle (non signé, mêmes vérifications que la release)
+        run: ./gradlew --no-daemon test assembleRelease -PversionCode=${{ github.run_number }}
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')

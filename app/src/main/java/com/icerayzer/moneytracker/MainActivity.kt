@@ -85,6 +85,7 @@ class MainActivity : Activity() {
     // Android 15+ impose l'affichage sous les barres système : on l'active partout et on décale le contenu.
     private fun drawBehindSystemBars(root: FrameLayout) {
         if (Build.VERSION.SDK_INT < 30) return
+        @Suppress("DEPRECATION") // sans effet à partir d'Android 15, où c'est le comportement imposé
         window.setDecorFitsSystemWindows(false)
         @Suppress("DEPRECATION")
         window.statusBarColor = Color.TRANSPARENT

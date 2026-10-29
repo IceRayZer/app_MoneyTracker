@@ -458,7 +458,7 @@
 
     const $ = id => document.getElementById(id);
     const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-    const fmt = n => n.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+    const fmt = n => Number(n).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
     const fmtS = n => (n > 0 ? '+' : n < 0 ? '−' : '') + fmt(Math.abs(n));
     const cls = n => (n >= 0 ? 'pos' : 'neg');
     const num = s => { const n = parseFloat(String(s ?? '').replace(/[\s  ]/g, '').replace(',', '.')); return isFinite(n) ? n : null; };
@@ -960,14 +960,28 @@
         a.click();
         a.remove();
     }
+    // Un fichier importé vient de l'extérieur : on ne garde que des champs du bon type (sinon du HTML pourrait s'y glisser).
+    function cleanBackup(obj) {
+        const n = v => { const x = Number(v); if (!isFinite(x)) throw new Error('nombre'); return x; };
+        const str = v => String(v ?? '');
+        const day = v => { if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) throw new Error('date'); return v; };
+        if (!Array.isArray(obj.accounts) || !Array.isArray(obj.expenses)) throw new Error('format');
+        return {
+            accounts: obj.accounts.map(a => ({ id: n(a.id), name: str(a.name), balance: n(a.balance ?? 0), tag: str(a.tag) })),
+            expenses: obj.expenses.map(e => ({ id: n(e.id), name: str(e.name), amount: n(e.amount), type: e.type === 'revenu' ? 'revenu' : 'depense', accountId: n(e.accountId), tag: str(e.tag) })),
+            savings: +obj.savings || 0,
+            withdrawals: (obj.withdrawals || []).map(w => ({ id: n(w.id), name: str(w.name), amount: n(w.amount), accountId: n(w.accountId), date: day(w.date) })),
+            sourceAccounts: Object.fromEntries(Object.entries(obj.sourceAccounts || {}).map(([k, v]) => [str(k), n(v)]))
+        };
+    }
     $('importFile').onchange = async e => {
         const file = e.target.files[0];
         if (!file) return;
         try {
             const obj = JSON.parse(await file.text());
-            if (!Array.isArray(obj.accounts) || !Array.isArray(obj.expenses)) throw new Error('format');
+            const clean = cleanBackup(obj);
             if (confirm('Remplacer toutes les données actuelles par ce fichier ?')) {
-                data = { accounts: obj.accounts, expenses: obj.expenses, savings: obj.savings || 0, withdrawals: obj.withdrawals || [], sourceAccounts: obj.sourceAccounts || {} };
+                data = clean;
                 feedback('Données importées');
                 save();
             }
