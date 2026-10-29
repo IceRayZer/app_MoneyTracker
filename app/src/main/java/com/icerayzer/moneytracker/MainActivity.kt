@@ -1,10 +1,12 @@
 package com.icerayzer.moneytracker
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.SharedPreferences
+import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.Color
 import android.net.Uri
@@ -27,6 +29,7 @@ class MainActivity : Activity() {
     private lateinit var web: WebView
     private var fileCallback: ValueCallback<Array<Uri>>? = null
     private var pendingExport: String? = null
+    val sync by lazy { BluetoothSync(this) }
 
     // Gardé en champ : Android ne garde qu'une référence faible vers l'écouteur.
     private val paymentsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
@@ -72,6 +75,7 @@ class MainActivity : Activity() {
 
     override fun onDestroy() {
         PaymentStore.prefs(this).unregisterOnSharedPreferenceChangeListener(paymentsListener)
+        sync.cancel()
         web.destroy()
         super.onDestroy()
     }
@@ -108,6 +112,18 @@ class MainActivity : Activity() {
             .setType("application/json")
             .putExtra(Intent.EXTRA_TITLE, name)
         if (!start(intent, REQ_EXPORT)) pendingExport = null
+    }
+
+    /** Android 12+ : « Appareils à proximité » se demande à l'exécution ; la réponse revient par onSyncPermission. */
+    fun requestBluetooth() = runOnUiThread {
+        requestPermissions(arrayOf(Manifest.permission.BLUETOOTH_CONNECT), REQ_BLUETOOTH)
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == REQ_BLUETOOTH) {
+            js("onSyncPermission(${grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED})")
+        }
     }
 
     fun listen() {
@@ -152,11 +168,15 @@ class MainActivity : Activity() {
         false
     }
 
-    private fun js(code: String) = web.evaluateJavascript(code, null)
+    /** Exécute du JavaScript dans la page ; peut être appelé depuis n'importe quel fil. */
+    fun js(code: String) {
+        web.post { web.evaluateJavascript(code, null) }
+    }
 
     private companion object {
         const val REQ_IMPORT = 1
         const val REQ_EXPORT = 2
         const val REQ_SPEECH = 3
+        const val REQ_BLUETOOTH = 4
     }
 }

@@ -106,3 +106,11 @@ Test de l'analyse : fonction pure, testée avec des phrases d'exemple (le plus s
 - Push GitHub : fonctionne. Compilation : faite par GitHub Actions (le SDK reste bloqué dans l'environnement Claude).
 - Apps surveillées : Google Wallet (+ services Google Play), Caisse d'Épargne (`com.caisseepargne.android.mobilebanking`), N26. À compléter selon les banques de l'utilisateur.
 - Reste à faire par l'utilisateur : secrets de signature, premier tag, test sur le téléphone, exemples réels de notifications pour affiner l'extraction.
+
+## 12. Synchro entre téléphones (30/10/2026)
+
+- Bluetooth classique (RFCOMM), appareils déjà jumelés dans Android : le lien est chiffré et authentifié par le jumelage. Aucune permission Internet. NFC écarté (trop lent, téléphones à garder collés).
+- Le natif ne fait que transporter (`BluetoothSync.kt`, trames dans `Frames.kt`, pont dans `Bridge.kt`) ; la fusion est en JavaScript (`mergeData` dans `index.html`) : élément le plus récent gagne (`updatedAt`), suppressions par « pierres tombales » (`data.deleted`), comptes de même nom unifiés.
+- Données reçues revalidées comme un import (`cleanBackup`). L'hôte doit accepter la demande avant tout envoi.
+- Doublons de paiements : à la synchro, les paiements en attente déjà validés sur l'autre téléphone (même montant, heure de notification à 90 s près, champ `nt`) sont retirés de « À valider ».
+- Testé ici : fusion (8 scénarios, convergence des deux sens), trames (5 tests), parcours à l'écran avec deux téléphones simulés. **Pas testé : le vrai Bluetooth entre deux téléphones** (pas de matériel ici).

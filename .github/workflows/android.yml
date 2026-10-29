@@ -21,6 +21,8 @@ jobs:
           distribution: temurin
           java-version: 17
       - uses: gradle/actions/setup-gradle@v5
+      - name: Test de la fusion entre téléphones (JavaScript)
+        run: node app/src/test/js/merge.test.js
       - name: Tests et APK de contrôle (non signé, mêmes vérifications que la release)
         run: ./gradlew --no-daemon test assembleRelease -PversionCode=${{ github.run_number }}
 

@@ -18,6 +18,20 @@ Suivi de mes comptes sur Android, sans rien saisir : l'app lit les notifications
 
 Télécharge le nouvel APK depuis Releases et installe-le **par-dessus** : les données sont conservées (même identifiant d'app, même signature).
 
+## Synchroniser deux téléphones (Bluetooth, sans internet)
+
+Les données ne passent que d'un téléphone à l'autre, en Bluetooth : rien ne transite par internet ni par un serveur, et l'app n'a toujours pas la permission Internet.
+
+1. **Une seule fois** : jumelle les deux téléphones dans les réglages Bluetooth d'Android (bouton « Réglages Bluetooth » de l'écran de synchro).
+2. Sur **les deux téléphones** : **Plus → Autre téléphone → Synchroniser**. Au premier lancement, Android demande l'autorisation « Appareils à proximité » : accepte.
+3. Sur l'un des deux, touche le **nom de l'autre**. Sur l'autre, accepte la demande. Les deux téléphones sont ensuite à jour.
+
+Comment les données sont fusionnées :
+- un élément modifié sur les deux téléphones : la version la plus récente gagne ; une suppression sur un téléphone est reprise par l'autre ;
+- un compte du même nom sur les deux téléphones devient un seul compte ;
+- un paiement détecté sur les deux téléphones : une fois validé sur l'un, il disparaît de « À valider » sur l'autre à la synchro suivante. Si tu le valides sur les deux **avant** de synchroniser, il sera en double : supprime l'un des deux ;
+- l'ordre des comptes n'est pas synchronisé, et il faut que l'heure des deux téléphones soit juste (réglage automatique).
+
 ## Récupérer les données de l'ancienne version web
 
 L'app Android a son propre stockage. Dans l'ancienne version (navigateur) : ⚙️ → **Exporter**. Dans l'app : **Plus → Importer un fichier**.
@@ -41,3 +55,4 @@ Ensuite, pour chaque version : créer un tag `vX.Y.Z` (ex. depuis **Releases →
 - Interface : `app/src/main/assets/index.html` (un seul fichier, sans dépendance).
 - Natif : `MainActivity` (WebView), `PaymentListenerService` (notifications), `Bridge` (pont JavaScript), `parsePayment` (extraction, testée dans `PaymentParserTest`).
 - `./gradlew test assembleDebug`
+- Fusion entre téléphones : `mergeData` dans `index.html`, testée par `node app/src/test/js/merge.test.js`. Transport Bluetooth : `BluetoothSync.kt` et `Frames.kt`.
