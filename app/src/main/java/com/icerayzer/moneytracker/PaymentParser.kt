@@ -18,7 +18,8 @@ val PAYMENT_APPS = mapOf(
 private val TITLE_IS_MERCHANT = setOf("com.google.android.apps.walletnfcrel", "com.google.android.gms")
 
 // Montant : « 12,50 », « 1 234,00 » (espaces fines comprises), « 1.234,56 », « 8.40 ».
-private const val NUMBER = """(?<!\d)(\d{1,3}(?:[   .,]\d{3})+|\d+)(?:[.,](\d{1,2}))?(?!\d)"""
+// Pas de chiffre, « / », « : » ni séparateur juste avant : « le 12/03 250,00 € » ne donne pas 3 250 €.
+private const val NUMBER = """(?<![\d/:.,])(\d{1,3}(?:[   .,]\d{3})+|\d+)(?:[.,](\d{1,2}))?(?!\d)"""
 private const val SPACE = """[\s\u00A0\u202F]*""" // \s ne couvre pas les espaces insécables
 private val AMOUNT_AFTER = Regex("""$NUMBER$SPACE(?:€|EUR\b)""", RegexOption.IGNORE_CASE)
 private val AMOUNT_BEFORE = Regex("""(?:€|EUR)$SPACE$NUMBER""", RegexOption.IGNORE_CASE)
@@ -33,7 +34,8 @@ private val MERCHANT = Regex(
 fun parsePayment(title: String?, text: String?, pkg: String): Payment? {
     val t = title.orEmpty().trim()
     val all = listOf(t, text.orEmpty().trim()).filter { it.isNotEmpty() }.joinToString("\n")
-    val m = AMOUNT_AFTER.find(all) ?: AMOUNT_BEFORE.find(all) ?: return null
+    // Le premier montant du texte est le paiement ; un solde éventuel vient après.
+    val m = listOfNotNull(AMOUNT_AFTER.find(all), AMOUNT_BEFORE.find(all)).minByOrNull { it.range.first } ?: return null
     val amount = (m.groupValues[1].filter(Char::isDigit) + "." + m.groupValues[2].ifEmpty { "0" }).toDouble()
     if (amount <= 0) return null
 

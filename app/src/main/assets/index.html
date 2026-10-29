@@ -899,6 +899,9 @@
     document.addEventListener('visibilitychange', () => { if (!document.hidden) loadPending(); });
 
     function renderPending() {
+        // Garde ce que l'utilisateur a déjà modifié dans les tickets affichés
+        const typed = {};
+        $('pendingList').querySelectorAll('input, select').forEach(el => typed[el.id] = el.value);
         $('pendingBlock').hidden = !pending.length;
         $('pendingCount').textContent = pending.length;
         const opts = data.accounts.map(a => `<option value="${a.id}">${esc(a.name)}</option>`).join('');
@@ -926,6 +929,7 @@
             const sel = $('pa-' + p.id), last = data.sourceAccounts[p.source];
             if (sel && data.accounts.some(a => a.id === last)) sel.value = last;
         });
+        Object.entries(typed).forEach(([id, v]) => { if ($(id)) $(id).value = v; });
     }
     function validatePayment(id) {
         const p = pending.find(x => x.id === id);

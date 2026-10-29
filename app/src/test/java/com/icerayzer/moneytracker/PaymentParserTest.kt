@@ -27,6 +27,10 @@ class PaymentParserTest {
     @Test fun montantDansLeTitre() = check("12,00 €", "Chez Lidl", wallet, 12.0, "Lidl")
     @Test fun numeroDeCarteNonPrisPourMontant() = check("", "Carte ••1234 : 19,90 € chez Fnac", bank, 19.90, "Fnac")
 
+    @Test fun dateAvantMontant() = check("", "Paiement le 12/03 250,00 € chez Leclerc", bank, 250.0, "Leclerc")
+    @Test fun heureAvantMontant() = check("", "Achat à 14:32 100 € chez Fnac", bank, 100.0, "Fnac")
+    @Test fun premierMontantPasLeSolde() = check("", "You paid €8.40 at Starbucks. Balance 120,00 €", wallet, 8.40, "Starbucks")
+
     @Test fun sansMontantIgnore() = assertNull(parsePayment("Google Wallet", "Votre carte a été ajoutée", wallet))
     @Test fun nombreSansDeviseIgnore() = assertNull(parsePayment("Code", "Votre code est 123456", bank))
     @Test fun texteNull() = assertNull(parsePayment(null, null, bank))

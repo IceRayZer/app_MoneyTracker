@@ -13,8 +13,8 @@ import java.util.UUID
  * et met le résultat en attente de validation. Le texte brut de la notification n'est jamais stocké.
  */
 class PaymentListenerService : NotificationListenerService() {
-    // ponytail: dédoublonnage en mémoire (paquet + texte + minute), perdu si le service redémarre ; suffisant pour les doublons immédiats.
-    private val seen = LinkedHashSet<Int>()
+    // ponytail: dédoublonnage en mémoire (même paquet + même texte à moins de 2 min), perdu si le service redémarre ; suffisant pour les doublons immédiats.
+    private val seen = LinkedHashMap<Int, Long>()
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         val source = PAYMENT_APPS[sbn.packageName] ?: return
@@ -26,10 +26,11 @@ class PaymentListenerService : NotificationListenerService() {
         val payment = parsePayment(title, text, sbn.packageName) ?: return
 
         val now = System.currentTimeMillis()
-        val key = "${sbn.packageName}|$title|$text|${now / 60_000}".hashCode()
+        val key = "${sbn.packageName}|$title|$text".hashCode()
         synchronized(seen) {
-            if (!seen.add(key)) return
-            if (seen.size > 200) seen.remove(seen.first())
+            val last = seen.put(key, now)
+            if (last != null && now - last < 120_000) return
+            if (seen.size > 200) seen.remove(seen.keys.first())
         }
         PaymentStore.add(this, payment, source, now)
     }
@@ -46,9 +47,12 @@ object PaymentStore {
     @Synchronized
     fun list(c: Context): String = prefs(c).getString(KEY, null) ?: "[]"
 
+    // Une file illisible est remplacée par une vide plutôt que de bloquer le service à chaque notification.
+    private fun read(c: Context) = runCatching { JSONArray(list(c)) }.getOrElse { JSONArray() }
+
     @Synchronized
     fun add(c: Context, p: Payment, source: String, time: Long) {
-        val all = JSONArray(list(c))
+        val all = read(c)
         all.put(
             JSONObject()
                 .put("id", UUID.randomUUID().toString())
@@ -63,7 +67,7 @@ object PaymentStore {
 
     @Synchronized
     fun ack(c: Context, id: String) {
-        val all = JSONArray(list(c))
+        val all = read(c)
         val kept = JSONArray()
         for (i in 0 until all.length()) all.getJSONObject(i).takeIf { it.optString("id") != id }?.let(kept::put)
         prefs(c).edit().putString(KEY, kept.toString()).apply()
