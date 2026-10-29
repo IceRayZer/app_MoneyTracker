@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MoneyTracker</title>
+    <link rel="manifest" href="manifest.webmanifest">
+    <meta name="theme-color" content="#667eea">
+    <link rel="icon" href="icon-192.png">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #333;
+        }
+        .container {
+            max-width: 560px;
+            margin: 0 auto;
+            background: #fff;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+            padding: 24px 20px;
+            text-align: center;
+        }
+        .header h1 { font-size: 26px; margin-bottom: 4px; }
+        .header p { opacity: 0.9; font-size: 14px; }
+
+        input, select {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+        }
+        .btn-edit {
+            background: #667eea;
+            width: 30px;
+            height: 30px;
+            padding: 0;
+            border-radius: 50%;
+            margin-left: 8px;
+        }
+        .btn-del {
+            background: #ff6b6b;
+            width: 30px;
+            height: 30px;
+            padding: 0;
+            border-radius: 50%;
+            margin-left: 8px;
+        }
+
+        /* Saisie vocale / texte */
+        .voice { padding: 16px 20px; background: #f8f9fa; border-bottom: 1px solid #eee; }
+        .voice-row { display: flex; gap: 8px; }
+        .voice-row input { flex: 1; }
+        .voice-row button { width: auto; }
+        .mic {
+            width: 48px;
+            flex: none;
+            padding: 0;
+            font-size: 20px;
+            background: linear-gradient(135deg, #ff6b6b 0%, #ff5252 100%);
+        }
+        .mic.listening {
+            background: linear-gradient(135deg, #51cf66 0%, #40c057 100%);
+            animation: pulse 1s infinite;
+        }
+        @keyframes pulse { 50% { opacity: 0.6; } }
+        .hint { font-size: 12px; color: #888; margin-top: 6px; }
+        .feedback {
+            display: none;
+            margin-top: 10px;
+            padding: 12px;
+            border-radius: 8px;
+            background: #e7f5ff;
+            border-left: 4px solid #4dabf7;
+            color: #1971c2;
+            font-size: 13px;
+        }
+        .feedback.show { display: block; }
+        .feedback.error { background: #ffe3e3; border-left-color: #ff6b6b; color: #c92a2a; }
+
+        /* Onglets */
+        .tabs { display: flex; border-bottom: 1px solid #eee; }
+        .tab-btn {
+            flex: 1;
+            background: #fff;
+            color: #666;
+            border-radius: 0;
+            border-bottom: 3px solid transparent;
+            padding: 14px 4px;
+            font-size: 13px;
+            width: auto;
+        }
+        .tab-btn.active { color: #667eea; border-bottom-color: #667eea; }
+        .content { display: none; padding: 20px; }
+        .content.active { display: block; }
+
+        .form-group { margin-bottom: 12px; }
+        label { display: block; margin-bottom: 5px; font-weight: 600; font-size: 14px; }
+        .form-group + button, .form-row + button { margin-bottom: 12px; }
+
+        .section-title {
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #667eea;
+            font-weight: 700;
+            margin: 20px 0 10px;
+        }
+        .card {
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 14px;
+            border-radius: 8px;
+            margin-bottom: 12px;
+        }
+        .card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+        .card-head h3 { font-size: 16px; margin-bottom: 2px; }
+        .card-head small { color: #888; font-size: 12px; }
+        .big { font-size: 20px; font-weight: 700; color: #667eea; white-space: nowrap; }
+        .row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+            font-size: 14px;
+        }
+        .row small { display: block; color: #888; font-size: 12px; }
+        .row .amt { white-space: nowrap; text-align: right; }
+        .row .amt small { display: block; }
+        .pos { color: #40c057; }
+        .neg { color: #ff6b6b; }
+        table.recap { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 8px; }
+        table.recap th, table.recap td { padding: 7px 4px; border-bottom: 1px solid #eee; text-align: right; }
+        table.recap th:first-child, table.recap td:first-child { text-align: left; }
+        table.recap th { font-size: 12px; color: #888; font-weight: 600; }
+        table.recap tr.total td { font-weight: 700; }
+        .empty { text-align: center; color: #999; padding: 16px; font-size: 14px; }
+        .handle { cursor: grab; color: #aaa; font-size: 20px; user-select: none; }
+        .card.dragging { opacity: 0.5; }
+        .tabs { overflow-x: auto; }
+        .tab-btn { flex: none; min-width: 84px; }
+        .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+        .stat { background: #f8f9fa; border-left: 4px solid #667eea; padding: 12px; border-radius: 8px; }
+        .stat h4 { font-size: 12px; color: #666; text-transform: uppercase; margin-bottom: 4px; }
+        .stat .big { font-size: 18px; }
+        .day-head { display: flex; justify-content: space-between; margin-top: 16px; padding-bottom: 6px; border-bottom: 2px solid #667eea; font-size: 14px; font-weight: 700; text-transform: capitalize; }
+        .handle { touch-action: none; }
+        @media (max-width: 480px) {
+            body { padding: 0; }
+            .container { border-radius: 0; min-height: 100vh; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>💰 MoneyTracker</h1>
+            <p>Gère ton argent</p>
+        </div>
+
+        <div class="voice">
+            <div class="voice-row">
+                <button class="mic" id="micBtn" onclick="toggleMic()" title="Parler">🎤</button>
+                <input type="text" id="voiceInput" placeholder="Ex : loyer 800 sur N26 tag logement"
+                       onkeydown="if (event.key === 'Enter') handleInput(this.value)">
+                <button onclick="handleInput($('voiceInput').value)">OK</button>
+            </div>
+            <div class="hint">Dis ou tape : « loyer 800 sur N26 » · « revenu salaire 2500 sur N26 » · « compte N26 1200 »</div>
+            <div id="feedback" class="feedback"></div>
+        </div>
+
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="dashboard" onclick="switchTab('dashboard')">📊 Dashboard</button>
+            <button class="tab-btn" data-tab="accounts" onclick="switchTab('accounts')">🏦 Comptes</button>
+            <button class="tab-btn" data-tab="entries" onclick="switchTab('entries')">💸 Entrées</button>
+            <button class="tab-btn" data-tab="savings" onclick="switchTab('savings')">💾 Épargne</button>
+            <button class="tab-btn" data-tab="withdrawals" onclick="switchTab('withdrawals')">💵 Retraits</button>
+            <button class="tab-btn" data-tab="backup" onclick="switchTab('backup')">⚙️</button>
+        </div>
+
+        <!-- DASHBOARD -->
+        <div id="dashboard" class="content active"></div>
+
+        <!-- COMPTES -->
+        <div id="accounts" class="content">
+            <div class="form-group"><label>Nom du compte</label><input type="text" id="accName" placeholder="Ex : N26, Compte courant..."></div>
+            <div class="form-group"><label>Solde (€)</label><input type="number" id="accBalance" placeholder="0" step="0.01"></div>
+            <div class="form-group"><label>Tag (optionnel)</label><input type="text" id="accTag" placeholder="Ex : Banque 2, Personnel..."></div>
+            <button id="accSubmit" onclick="saveAccount()">➕ Ajouter un compte</button>
+            <button id="accCancel" onclick="cancelEdit('account')" style="display:none; background:#adb5bd; margin-top:8px;">Annuler</button>
+            <div id="accountsList" style="margin-top: 20px;"></div>
+        </div>
+
+        <!-- ENTRÉES (dépenses et revenus mensuels) -->
+        <div id="entries" class="content">
+            <div class="form-group">
+                <label>Type</label>
+                <select id="entType">
+                    <option value="depense">Dépense mensuelle</option>
+                    <option value="revenu">Revenu mensuel</option>
+                </select>
+            </div>
+            <div class="form-group"><label>Description</label><input type="text" id="entName" placeholder="Ex : Loyer, Salaire..."></div>
+            <div class="form-group"><label>Montant mensuel (€)</label><input type="number" id="entAmount" placeholder="0" step="0.01"></div>
+            <div class="form-group">
+                <label>Compte lié</label>
+                <select id="entAccount"><option value="">-- Choisir un compte --</option></select>
+            </div>
+            <div class="form-group"><label>Tag (optionnel)</label><input type="text" id="entTag" placeholder="Ex : Logement, Assurance..."></div>
+            <button id="entSubmit" onclick="saveEntry()">➕ Ajouter</button>
+            <button id="entCancel" onclick="cancelEdit('entry')" style="display:none; background:#adb5bd; margin-top:8px;">Annuler</button>
+            <div id="entriesList" style="margin-top: 20px;"></div>
+        </div>
+
+        <!-- RETRAITS (dépenses ponctuelles faites à la main) -->
+        <div id="withdrawals" class="content">
+            <div id="wdSummary" class="stats"></div>
+            <div class="section-title">Ajouter / modifier un retrait</div>
+            <div class="form-group"><label>Description (optionnel)</label><input type="text" id="wdName" placeholder="Ex : Courses, Essence..."></div>
+            <div class="form-group"><label>Montant (€)</label><input type="number" id="wdAmount" placeholder="0" step="0.01"></div>
+            <div class="form-group">
+                <label>Compte débité</label>
+                <select id="wdAccount"><option value="">-- Choisir un compte --</option></select>
+            </div>
+            <div class="form-group"><label>Date</label><input type="date" id="wdDate"></div>
+            <button id="wdSubmit" onclick="saveWithdrawal()">➕ Ajouter le retrait</button>
+            <button id="wdCancel" onclick="cancelEdit('withdrawal')" style="display:none; background:#adb5bd; margin-top:8px;">Annuler</button>
+            <div class="section-title">Historique</div>
+            <div id="wdList"></div>
+        </div>
+
+        <!-- SAUVEGARDE -->
+        <div id="backup" class="content">
+            <p class="hint" style="margin-bottom: 12px;">Tes données sont enregistrées sur ce téléphone. Exporte-les régulièrement et envoie le fichier sur Google Drive.</p>
+            <button onclick="exportData()">💾 Exporter (fichier JSON)</button>
+            <button onclick="$('importFile').click()" style="margin-top: 8px; background: #adb5bd;">📂 Importer un fichier</button>
+            <input type="file" id="importFile" accept="application/json,.json" style="display:none" onchange="importData(this.files[0])">
+        </div>
+
+        <!-- ÉPARGNE -->
+        <div id="savings" class="content">
+            <div class="form-group"><label>Montant à épargner chaque mois (€)</label><input type="number" id="savAmount" placeholder="0" step="0.01"></div>
+            <button onclick="setSavings()">💾 Définir l'épargne</button>
+            <div id="savResult" style="margin-top: 20px;"></div>
+        </div>
+    </div>
+
+    <script>
+        const KEY = 'moneyData';
+        // expenses = toutes les entrées (dépenses ET revenus), avec un champ type
+        let data = { accounts: [], expenses: [], savings: 0, withdrawals: [] };
+
+        const $ = id => document.getElementById(id);
+        const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        const fmt = n => n.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+        const fmtS = n => (n > 0 ? '+' : '') + fmt(n);
+        const cls = n => (n >= 0 ? 'pos' : 'neg');
+        const isIncome = e => e.type === 'revenu';
+        const sumOf = (list, income) => list.filter(e => isIncome(e) === income).reduce((s, e) => s + e.amount, 0);
+
+        // ---------- Stockage ----------
+        function load() {
+            try {
+                const saved = JSON.parse(localStorage.getItem(KEY));
+                if (saved) data = { ...data, ...saved };
+            } catch (e) { /* données illisibles : on repart de zéro */ }
+        }
+        function save() {
+            localStorage.setItem(KEY, JSON.stringify(data));
+            renderAll();
+        }
+
+        // ---------- Feedback ----------
+        let fbTimer;
+        function feedback(msg, isError = false) {
+            const el = $('feedback');
+            el.textContent = msg;
+            el.className = 'feedback show' + (isError ? ' error' : '');
+            clearTimeout(fbTimer);
+            fbTimer = setTimeout(() => el.classList.remove('show'), 5000);
+        }
+
+        // ---------- Saisie vocale ----------
+        const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+        let rec = null, listening = false;
+        const SPEECH_ERRORS = {
+            'no-speech': 'Je n’ai rien entendu. Réessaie.',
+            'audio-capture': 'Micro non détecté.',
+            'network': 'Erreur réseau : tape la phrase dans le champ à côté.',
+            'not-allowed': 'Micro refusé : autorise-le dans les paramètres du navigateur.'
+        };
+        if (SR) {
+            rec = new SR();
+            rec.lang = 'fr-FR';
+            rec.continuous = false;
+            rec.interimResults = false;
+            rec.maxAlternatives = 1;
+            rec.onstart = () => { listening = true; $('micBtn').classList.add('listening'); feedback('🎤 Je t’écoute...'); };
+            rec.onresult = e => {
+                const text = e.results[0][0].transcript;
+                $('voiceInput').value = text;
+                handleInput(text);
+            };
+            rec.onerror = e => feedback(SPEECH_ERRORS[e.error] || 'Erreur vocale : ' + e.error, true);
+            rec.onend = () => { listening = false; $('micBtn').classList.remove('listening'); };
+        } else {
+            $('micBtn').disabled = true;
+            $('micBtn').title = 'Reconnaissance vocale non supportée par ce navigateur';
+        }
+        function toggleMic() {
+            if (!rec) return;
+            if (listening) { rec.stop(); return; }
+            try { rec.start(); } catch (e) { /* déjà en cours */ }
+        }
+
+        // ---------- Analyse de la phrase ----------
+        // Exemples : "loyer 800 sur N26 tag logement", "revenu salaire 2500 sur N26", "compte N26 1200"
+        const NUM = /\d+(?:[.,]\d+)?/;
+        const cap = s => s.replace(/\b\w/g, c => c.toUpperCase());
+        function parseInput(raw) {
+            let t = raw.toLowerCase().replace(/\s+/g, ' ').trim();
+
+            let tag = '';
+            const tm = t.match(/\btag (.+)$/);
+            if (tm) { tag = cap(tm[1].trim()); t = t.slice(0, tm.index).trim(); }
+
+            t = t.replace(/€|\beuros?\b/g, ' ').replace(/\s+/g, ' ').trim();
+            const nm = t.match(NUM);
+            const amount = nm ? parseFloat(nm[0].replace(',', '.')) : null;
+
+            // Compte
+            if (/^(ajoute |ajouter |nouveau |nouvel )?compte\b/.test(t)) {
+                const name = t.replace(/^(ajoute |ajouter |nouveau |nouvel )?compte\b/, '').replace(NUM, ' ').replace(/\s+/g, ' ').trim();
+                if (!name) return { error: 'Dis le nom du compte, ex : compte N26 1200' };
+                return { kind: 'account', name: cap(name), balance: amount || 0, tag };
+            }
+
+            // Entrée (dépense ou revenu)
+            let type = 'depense';
+            if (/^revenu\b/.test(t)) { type = 'revenu'; t = t.replace(/^revenu\b/, ''); }
+            else t = t.replace(/^(d[ée]pense|frais)\b/, '');
+            t = t.trim();
+
+            const acc = [...data.accounts]
+                .sort((a, b) => b.name.length - a.name.length)
+                .find(a => t.includes(a.name.toLowerCase()));
+
+            if (amount === null) return { error: 'Il manque le montant, ex : loyer 800 sur N26' };
+            if (!acc) return { error: 'Précise le compte existant, ex : loyer 800 sur N26' };
+
+            const name = (acc ? t.replace(acc.name.toLowerCase(), ' ') : t)
+                .replace(NUM, ' ')
+                .replace(/\b(sur|avec|le|la|les|de|du|mon|ma|compte)\b/g, ' ')
+                .replace(/\s+/g, ' ').trim();
+            if (!name) return { error: 'Il manque le nom, ex : loyer 800 sur N26' };
+
+            return { kind: 'entry', type, name: cap(name), amount, accountId: acc.id, tag };
+        }
+
+        function handleInput(text) {
+            if (!text.trim()) return;
+            const r = parseInput(text);
+            if (r.error) return feedback(r.error, true);
+
+            if (r.kind === 'account') {
+                data.accounts.push({ id: Date.now(), name: r.name, balance: r.balance, tag: r.tag });
+                feedback(`✅ Compte « ${r.name} » ajouté : ${fmt(r.balance)}`);
+            } else {
+                data.expenses.push({ id: Date.now(), name: r.name, amount: r.amount, type: r.type, accountId: r.accountId, tag: r.tag });
+                feedback(`✅ ${r.type === 'revenu' ? 'Revenu' : 'Dépense'} « ${r.name} » ajouté : ${fmt(r.amount)}/mois`);
+            }
+            $('voiceInput').value = '';
+            save();
+        }
+
+        // ---------- Onglets ----------
+        function switchTab(name) {
+            document.querySelectorAll('.content').forEach(e => e.classList.toggle('active', e.id === name));
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+        }
+
+        // ---------- Actions manuelles (ajout ou modification) ----------
+        let editAccountId = null, editEntryId = null;
+
+        function saveAccount() {
+            const name = $('accName').value.trim();
+            if (!name) return feedback('Nom du compte requis', true);
+            const vals = { name, balance: parseFloat($('accBalance').value) || 0, tag: $('accTag').value.trim() };
+            if (editAccountId !== null) {
+                Object.assign(data.accounts.find(a => a.id === editAccountId), vals);
+                feedback('✅ Compte modifié');
+            } else {
+                data.accounts.push({ id: Date.now(), ...vals });
+                feedback('✅ Compte ajouté');
+            }
+            cancelEdit('account');
+            save();
+        }
+        function editAccount(id) {
+            const a = data.accounts.find(x => x.id === id);
+            if (!a) return;
+            editAccountId = id;
+            $('accName').value = a.name;
+            $('accBalance').value = a.balance;
+            $('accTag').value = a.tag || '';
+            $('accSubmit').textContent = '💾 Enregistrer les modifications';
+            $('accCancel').style.display = 'block';
+            switchTab('accounts');
+            $('accName').focus();
+        }
+        function deleteAccount(id) {
+            if (!confirm('Supprimer ce compte et ses entrées ?')) return;
+            data.accounts = data.accounts.filter(a => a.id !== id);
+            data.expenses = data.expenses.filter(e => e.accountId !== id);
+            if (editAccountId === id) cancelEdit('account');
+            save();
+        }
+
+        function saveEntry() {
+            const name = $('entName').value.trim();
+            const amount = parseFloat($('entAmount').value);
+            const accountId = parseInt($('entAccount').value);
+            if (!name || !amount || !accountId) return feedback('Remplis le nom, le montant et le compte', true);
+            const vals = { name, amount, type: $('entType').value, accountId, tag: $('entTag').value.trim() };
+            if (editEntryId !== null) {
+                Object.assign(data.expenses.find(e => e.id === editEntryId), vals);
+                feedback('✅ Entrée modifiée');
+            } else {
+                data.expenses.push({ id: Date.now(), ...vals });
+                feedback('✅ Entrée ajoutée');
+            }
+            cancelEdit('entry');
+            save();
+        }
+        function editEntry(id) {
+            const e = data.expenses.find(x => x.id === id);
+            if (!e) return;
+            editEntryId = id;
+            $('entType').value = e.type || 'depense';
+            $('entName').value = e.name;
+            $('entAmount').value = e.amount;
+            $('entAccount').value = e.accountId;
+            $('entTag').value = e.tag || '';
+            $('entSubmit').textContent = '💾 Enregistrer les modifications';
+            $('entCancel').style.display = 'block';
+            switchTab('entries');
+            $('entName').focus();
+        }
+        function deleteEntry(id) {
+            if (!confirm('Supprimer cette entrée ?')) return;
+            data.expenses = data.expenses.filter(e => e.id !== id);
+            if (editEntryId === id) cancelEdit('entry');
+            save();
+        }
+        function cancelEdit(kind) {
+            if (kind === 'account') {
+                editAccountId = null;
+                ['accName', 'accBalance', 'accTag'].forEach(i => $(i).value = '');
+                $('accSubmit').textContent = '➕ Ajouter un compte';
+                $('accCancel').style.display = 'none';
+            } else if (kind === 'entry') {
+                editEntryId = null;
+                ['entName', 'entAmount', 'entTag'].forEach(i => $(i).value = '');
+                $('entType').value = 'depense';
+                $('entAccount').value = '';
+                $('entSubmit').textContent = '➕ Ajouter';
+                $('entCancel').style.display = 'none';
+            } else {
+                editWithdrawalId = null;
+                ['wdName', 'wdAmount'].forEach(i => $(i).value = '');
+                $('wdAccount').value = '';
+                $('wdDate').value = todayISO();
+                $('wdSubmit').textContent = '➕ Ajouter le retrait';
+                $('wdCancel').style.display = 'none';
+            }
+        }
+        function setSavings() {
+            data.savings = parseFloat($('savAmount').value) || 0;
+            feedback('✅ Épargne mise à jour');
+            save();
+        }
+
+        // ---------- Rendu ----------
+        function block(title, sub, balance, list) {
+            const net = sumOf(list, true) - sumOf(list, false);
+            const items = list.map(e => `
+                <div class="row">
+                    <span>${esc(e.name)}${e.tag ? `<small>${esc(e.tag)}</small>` : ''}</span>
+                    <span class="amt ${isIncome(e) ? 'pos' : 'neg'}">${isIncome(e) ? '+' : '-'}${fmt(e.amount)}/mois
+                        <small>${isIncome(e) ? '+' : '-'}${fmt(e.amount * 12)}/an</small></span>
+                </div>`).join('') || '<div class="empty">Aucune entrée</div>';
+            return `
+                <div class="card">
+                    <div class="card-head">
+                        <div><h3>${esc(title)}</h3>${sub ? `<small>${esc(sub)}</small>` : ''}</div>
+                        ${balance !== null ? `<div class="big">${fmt(balance)}</div>` : ''}
+                    </div>
+                    <table class="recap">
+                        <tr><th></th><th>Mois</th><th>Année</th></tr>
+                        <tr><td>Net</td><td class="${cls(net)}">${fmtS(net)}</td><td class="${cls(net)}">${fmtS(net * 12)}</td></tr>
+                        ${balance !== null ? `<tr class="total"><td>Solde dans 1 an</td><td></td><td>${fmt(balance + net * 12)}</td></tr>` : ''}
+                    </table>
+                    <div style="margin-top: 8px;">${items}</div>
+                </div>`;
+        }
+
+        function renderDashboard() {
+            const rev = sumOf(data.expenses, true);
+            const dep = sumOf(data.expenses, false);
+            const net = rev - dep;
+            const goal = +data.savings || 0;
+            const patrimoine = data.accounts.reduce((s, a) => s + balanceOf(a), 0);
+
+            let h = `
+                <div class="section-title">Général</div>
+                <div class="card">
+                    <div class="card-head">
+                        <h3>Patrimoine total</h3>
+                        <div class="big">${fmt(patrimoine)}</div>
+                    </div>
+                    <table class="recap">
+                        <tr><th></th><th>Mois</th><th>Année</th></tr>
+                        <tr><td>Revenus</td><td class="pos">${fmt(rev)}</td><td class="pos">${fmt(rev * 12)}</td></tr>
+                        <tr><td>Dépenses</td><td class="neg">-${fmt(dep)}</td><td class="neg">-${fmt(dep * 12)}</td></tr>
+                        <tr class="total"><td>Net</td><td class="${cls(net)}">${fmtS(net)}</td><td class="${cls(net)}">${fmtS(net * 12)}</td></tr>
+                        ${goal > 0 ? `
+                        <tr><td>Épargne</td><td class="neg">-${fmt(goal)}</td><td class="neg">-${fmt(goal * 12)}</td></tr>
+                        <tr class="total"><td>Net après épargne</td><td class="${cls(net - goal)}">${fmtS(net - goal)}</td><td class="${cls(net - goal)}">${fmtS((net - goal) * 12)}</td></tr>` : ''}
+                    </table>
+                </div>
+                <div class="section-title">Par compte</div>`;
+
+            data.accounts.forEach(a => {
+                h += block(a.name, a.tag, balanceOf(a), data.expenses.filter(e => e.accountId === a.id));
+            });
+            const orphans = data.expenses.filter(e => !data.accounts.some(a => a.id === e.accountId));
+            if (orphans.length) h += block('Sans compte', '', null, orphans);
+            if (!data.accounts.length) h += '<div class="empty">Ajoute un compte ou dis-le au micro pour commencer</div>';
+
+            $('dashboard').innerHTML = h;
+        }
+
+        function renderAccounts() {
+            $('accountsList').innerHTML = data.accounts.length
+                ? data.accounts.map(a => `
+                    <div class="card${drag && drag.id === a.id ? ' dragging' : ''}" data-acc-id="${a.id}">
+                        <div class="card-head">
+                            <div style="display:flex; align-items:center; gap:12px;">
+                                <span class="handle" title="Glisser pour réorganiser">☰</span>
+                                <div><h3>${esc(a.name)}</h3><small>${esc(a.tag || '')}</small></div>
+                            </div>
+                            <div style="display:flex; align-items:center;">
+                                <span class="big">${fmt(balanceOf(a))}</span>
+                                <button class="btn-edit" onclick="editAccount(${a.id})">✏️</button>
+                                <button class="btn-del" onclick="deleteAccount(${a.id})">🗑️</button>
+                            </div>
+                        </div>
+                    </div>`).join('')
+                : '<div class="empty">Aucun compte</div>';
+        }
+
+        // Réorganisation des comptes : glisser la poignée ☰ (souris ou doigt).
+        // L'ordre sert aussi au dashboard.
+        let drag = null; // { id } du compte en cours de déplacement
+        $('accountsList').addEventListener('pointerdown', e => {
+            const handle = e.target.closest('.handle');
+            if (!handle) return;
+            drag = { id: +handle.closest('[data-acc-id]').dataset.accId };
+            renderAccounts();
+        });
+        window.addEventListener('pointermove', e => {
+            if (!drag) return;
+            const over = document.elementFromPoint(e.clientX, e.clientY)?.closest('[data-acc-id]');
+            if (!over) return;
+            const toId = +over.dataset.accId;
+            if (toId === drag.id) return;
+            const from = data.accounts.findIndex(a => a.id === drag.id);
+            const to = data.accounts.findIndex(a => a.id === toId);
+            const [moved] = data.accounts.splice(from, 1);
+            data.accounts.splice(to, 0, moved);
+            renderAccounts();
+        });
+        const endDrag = () => {
+            if (!drag) return;
+            drag = null;
+            save();
+        };
+        window.addEventListener('pointerup', endDrag);
+        window.addEventListener('pointercancel', endDrag);
+
+        function renderEntries() {
+            $('entriesList').innerHTML = data.expenses.length
+                ? data.expenses.map(e => {
+                    const acc = data.accounts.find(a => a.id === e.accountId);
+                    return `
+                    <div class="row">
+                        <span>${esc(e.name)}<small>${esc(acc ? acc.name : 'Sans compte')}${e.tag ? ' • ' + esc(e.tag) : ''}</small></span>
+                        <span style="display:flex; align-items:center;">
+                            <b class="${isIncome(e) ? 'pos' : 'neg'}">${isIncome(e) ? '+' : '-'}${fmt(e.amount)}</b>
+                            <button class="btn-edit" onclick="editEntry(${e.id})">✏️</button>
+                            <button class="btn-del" onclick="deleteEntry(${e.id})">🗑️</button>
+                        </span>
+                    </div>`;
+                }).join('')
+                : '<div class="empty">Aucune entrée</div>';
+        }
+
+        function renderAccountSelect() {
+            const sel = $('entAccount');
+            const current = sel.value;
+            sel.innerHTML = '<option value="">-- Choisir un compte --</option>' +
+                data.accounts.map(a => `<option value="${a.id}">${esc(a.name)}${a.tag ? ' (' + esc(a.tag) + ')' : ''}</option>`).join('');
+            sel.value = current;
+        }
+
+        function renderSavings() {
+            const m = +data.savings || 0;
+            $('savResult').innerHTML = [['Sur 1 an', 1], ['Sur 5 ans', 5], ['Sur 10 ans', 10]]
+                .map(([label, years]) => `
+                    <div class="card">
+                        <div class="card-head"><h3>${label}</h3><div class="big">${fmt(m * 12 * years)}</div></div>
+                    </div>`).join('');
+        }
+
+        function renderAll() {
+            renderDashboard();
+            renderAccounts();
+            renderEntries();
+            renderAccountSelect();
+            renderSavings();
+            renderWithdrawals();
+        }
+
+        // ---------- Retraits (dépenses ponctuelles) ----------
+        // Un retrait diminue le solde du compte débité. Le solde saisi reste le solde de départ.
+        let editWithdrawalId = null;
+        const todayISO = () => new Date().toLocaleDateString('sv-SE'); // AAAA-MM-JJ, heure locale
+        function balanceOf(a) {
+            return a.balance - data.withdrawals.filter(w => w.accountId === a.id).reduce((s, w) => s + w.amount, 0);
+        }
+
+        function saveWithdrawal() {
+            const amount = parseFloat($('wdAmount').value);
+            const accountId = parseInt($('wdAccount').value);
+            if (!amount || !accountId) return feedback('Indique le montant et le compte', true);
+            const vals = { name: $('wdName').value.trim() || 'Retrait', amount, accountId, date: $('wdDate').value || todayISO() };
+            if (editWithdrawalId !== null) {
+                Object.assign(data.withdrawals.find(w => w.id === editWithdrawalId), vals);
+                feedback('✅ Retrait modifié');
+            } else {
+                data.withdrawals.push({ id: Date.now(), ...vals });
+                feedback('✅ Retrait ajouté');
+            }
+            cancelEdit('withdrawal');
+            save();
+        }
+        function editWithdrawal(id) {
+            const w = data.withdrawals.find(x => x.id === id);
+            if (!w) return;
+            editWithdrawalId = id;
+            $('wdName').value = w.name;
+            $('wdAmount').value = w.amount;
+            $('wdAccount').value = w.accountId;
+            $('wdDate').value = w.date;
+            $('wdSubmit').textContent = '💾 Enregistrer les modifications';
+            $('wdCancel').style.display = 'block';
+            switchTab('withdrawals');
+            $('wdAmount').focus();
+        }
+        function deleteWithdrawal(id) {
+            if (!confirm('Supprimer ce retrait ?')) return;
+            data.withdrawals = data.withdrawals.filter(w => w.id !== id);
+            if (editWithdrawalId === id) cancelEdit('withdrawal');
+            save();
+        }
+        function renderWithdrawals() {
+            const today = todayISO(), month = today.slice(0, 7), year = today.slice(0, 4);
+            const total = filter => data.withdrawals.filter(w => filter(w.date)).reduce((s, w) => s + w.amount, 0);
+            const stats = [
+                ["Aujourd'hui", total(d => d === today)],
+                ['Ce mois', total(d => d.startsWith(month))],
+                ['Cette année', total(d => d.startsWith(year))],
+                ['Total', total(() => true)]
+            ];
+            $('wdSummary').innerHTML = stats.map(([label, v]) =>
+                `<div class="stat"><h4>${label}</h4><div class="big">-${fmt(v)}</div></div>`).join('');
+
+            // Historique regroupé par jour, le plus récent en premier
+            const days = [...new Set(data.withdrawals.map(w => w.date))].sort().reverse();
+            $('wdList').innerHTML = days.length ? days.map(day => {
+                const items = data.withdrawals.filter(w => w.date === day);
+                const dayTotal = items.reduce((s, w) => s + w.amount, 0);
+                const label = new Date(day + 'T12:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+                return `<div class="day-head"><span>${label}</span><span>-${fmt(dayTotal)}</span></div>` +
+                    items.map(w => {
+                        const acc = data.accounts.find(a => a.id === w.accountId);
+                        return `<div class="row">
+                            <span>${esc(w.name)}<small>${esc(acc ? acc.name : 'Sans compte')}</small></span>
+                            <span style="display:flex; align-items:center;">
+                                <b class="neg">-${fmt(w.amount)}</b>
+                                <button class="btn-edit" onclick="editWithdrawal(${w.id})">✏️</button>
+                                <button class="btn-del" onclick="deleteWithdrawal(${w.id})">🗑️</button>
+                            </span>
+                        </div>`;
+                    }).join('');
+            }).join('') : '<div class="empty">Aucun retrait</div>';
+
+            const sel = $('wdAccount'), current = sel.value;
+            sel.innerHTML = '<option value="">-- Choisir un compte --</option>' +
+                data.accounts.map(a => `<option value="${a.id}">${esc(a.name)}</option>`).join('');
+            sel.value = current;
+        }
+
+        // ---------- Sauvegarde (fichier JSON à mettre sur Drive) ----------
+        function exportData() {
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'moneytracker-' + new Date().toISOString().slice(0, 10) + '.json';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+        }
+        async function importData(file) {
+            if (!file) return;
+            try {
+                const obj = JSON.parse(await file.text());
+                if (!Array.isArray(obj.accounts) || !Array.isArray(obj.expenses)) throw new Error('format');
+                if (!confirm('Remplacer toutes les données actuelles par ce fichier ?')) return;
+                data = { accounts: obj.accounts, expenses: obj.expenses, savings: obj.savings || 0, withdrawals: obj.withdrawals || [] };
+                feedback('✅ Données importées');
+                save();
+            } catch (e) {
+                feedback('Fichier invalide', true);
+            }
+            $('importFile').value = '';
+        }
+
+        // ---------- Notification de paiement ----------
+        // Ouvert avec ?notif=<texte de la notification> (ex. via MacroDroid), pré-remplit un retrait.
+        // ponytail: formats de banques variés, l'utilisateur vérifie et choisit le compte avant d'ajouter.
+        function fromNotif(text) {
+            const am = text.match(/(\d[\d\s.]*(?:[.,]\d{1,2})?)\s*(?:€|eur)/i) || text.match(/(?:€|eur)\s*(\d[\d\s.]*(?:[.,]\d{1,2})?)/i);
+            if (!am) return feedback('Montant introuvable dans la notification', true);
+            const amount = parseFloat(am[1].replace(/\s/g, '').replace(',', '.'));
+            const mm = text.match(/(?:^|\s)(?:chez|à|at|to|vers)\s+(.+?)(?:\s+le\s+\d|[.,;:!]|$)/i);
+            $('wdAmount').value = amount;
+            $('wdName').value = mm ? mm[1].trim() : '';
+            switchTab('withdrawals');
+            feedback('Paiement détecté : choisis le compte puis ajoute le retrait');
+        }
+
+        // ---------- Init ----------
+        load();
+        $('savAmount').value = data.savings || '';
+        $('wdDate').value = todayISO();
+        renderAll();
+        const notif = new URLSearchParams(location.search).get('notif');
+        if (notif) { fromNotif(notif); history.replaceState(null, '', location.pathname); }
+        if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+    </script>
+</body>
+</html>
