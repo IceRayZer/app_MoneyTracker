@@ -114,3 +114,11 @@ Test de l'analyse : fonction pure, testée avec des phrases d'exemple (le plus s
 - Données reçues revalidées comme un import (`cleanBackup`). L'hôte doit accepter la demande avant tout envoi.
 - Doublons de paiements : à la synchro, les paiements en attente déjà validés sur l'autre téléphone (même montant, heure de notification à 90 s près, champ `nt`) sont retirés de « À valider ».
 - Testé ici : fusion (8 scénarios, convergence des deux sens), trames (5 tests), parcours à l'écran avec deux téléphones simulés. **Pas testé : le vrai Bluetooth entre deux téléphones** (pas de matériel ici).
+
+## 13. Sens de l'argent et virements (01/11/2026)
+
+- `parsePayment` renvoie aussi : `credit` (argent reçu), `transfer` (virement), `card` (4 derniers chiffres), `currency`. Paiements refusés et alertes de solde ignorés. Exemples réels intégrés aux tests : virement Caisse d'Épargne (« … vers X ») et Google Wallet (« TRADER JOE S #1234 / $34.62 with Visa •••• 5678 »).
+- Revolut ajouté aux apps surveillées. Un même paiement signalé par Wallet et par l'app de la banque est fusionné (même montant, même sens, à 3 min près, sources différentes).
+- Opérations : `type` debit / credit / transfer (`toAccountId`). Un virement entre mes comptes vu par les deux banques est compté une fois (`seen`, même montant, à 3 jours près).
+- Choix mémorisés dans `sourceAccounts` : app ou carte → compte ; « vers X » / « de X » → compte (0 = quelqu'un d'autre).
+- Reste à vérifier avec de vraies notifications : virements reçus, notifications N26 et Revolut (formulations supposées, pas encore vues).

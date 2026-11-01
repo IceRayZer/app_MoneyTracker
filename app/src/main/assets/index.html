@@ -198,6 +198,8 @@
         .ticket .actions .btn:last-child { flex: 1; }
         .ticket .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
         .ticket label.field { margin: 0; min-width: 0; }
+        .ticket .full { grid-column: 1 / -1; }
+        .note { font-size: 14px; color: var(--ink-2); margin: 0 0 10px; }
 
         .banner {
             background: var(--surface); border-radius: 14px; padding: 14px;
@@ -338,10 +340,10 @@
         <div id="entriesList"></div>
     </section>
 
-    <!-- DÉPENSES PONCTUELLES (retraits) -->
+    <!-- OPÉRATIONS : dépenses, rentrées, virements entre mes comptes -->
     <section id="withdrawals" class="view" aria-labelledby="t-wd" hidden>
         <div class="block block-head">
-            <h1 id="t-wd">Dépenses</h1>
+            <h1 id="t-wd">Opérations</h1>
             <button type="button" class="btn small" data-action="new" data-kind="withdrawal">Ajouter</button>
         </div>
         <dl class="stats" id="wdStats"></dl>
@@ -400,7 +402,7 @@
         <button type="button" class="tab" data-tab="entries">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4m6-4v4"/></svg>Mensuel</button>
         <button type="button" class="tab" data-tab="withdrawals">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6m-6 4h6"/></svg>Dépenses</button>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6m-6 4h6"/></svg>Opérations</button>
         <button type="button" class="tab" data-tab="more">
             <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>Plus</button>
     </div>
@@ -442,13 +444,20 @@
     </form>
 </dialog>
 
-<!-- Fiche dépense ponctuelle -->
+<!-- Fiche opération -->
 <dialog id="dlg-withdrawal" aria-labelledby="dlg-withdrawal-t">
     <form>
         <h2 id="dlg-withdrawal-t"></h2>
+        <fieldset class="seg">
+            <legend class="sr-only">Type d'opération</legend>
+            <label><input type="radio" name="type" value="debit" checked><span>Dépense</span></label>
+            <label><input type="radio" name="type" value="credit"><span>Rentrée</span></label>
+            <label><input type="radio" name="type" value="transfer"><span>Virement</span></label>
+        </fieldset>
         <label class="field"><span>Montant (€)</span><input name="amount" inputmode="decimal" required placeholder="0"></label>
-        <label class="field"><span>Libellé (facultatif)</span><input name="name" placeholder="Courses, Essence…"></label>
-        <label class="field"><span>Compte débité</span><select name="accountId" required data-accounts></select></label>
+        <label class="field"><span>Libellé (facultatif)</span><input name="name" placeholder="Courses, Salaire, Épargne…"></label>
+        <label class="field"><span data-wd-from>Compte débité</span><select name="accountId" required data-accounts></select></label>
+        <label class="field" data-wd-to hidden><span>Vers mon compte</span><select name="toAccountId" data-accounts></select></label>
         <label class="field"><span>Date</span><input name="date" type="date" required></label>
         <div class="sheet-actions">
             <button type="button" class="btn danger" data-action="delete">Supprimer</button>
@@ -473,7 +482,9 @@
 <script>
     const KEY = 'moneyData';
     // expenses = entrées mensuelles (charges ET revenus, champ type) ; withdrawals = dépenses ponctuelles datées.
-    // sourceAccounts mémorise le compte choisi pour chaque app source des paiements détectés.
+    // withdrawals = opérations ponctuelles : type debit (défaut), credit, ou transfer (virement entre mes comptes, toAccountId).
+    // sourceAccounts mémorise les choix faits sur les tickets : compte d'une app ou d'une carte (« carte 1234 »),
+    // et l'autre partie d'un virement (« vers jean dupont », « de jean dupont » : un id de compte, 0 = quelqu'un d'autre).
     // updatedAt (sur chaque élément) et savingsAt servent à la synchro entre téléphones ; deleted garde la trace des suppressions.
     let data = { accounts: [], expenses: [], savings: 0, savingsAt: 0, withdrawals: [], sourceAccounts: {}, deleted: {} };
     const native = window.Bridge; // présent seulement dans l'app Android
@@ -517,6 +528,7 @@
         for (const d of [a, b]) {
             d.accounts.forEach(x => x.id = fix(x.id));
             [...d.expenses, ...d.withdrawals].forEach(x => x.accountId = fix(x.accountId));
+            d.withdrawals.forEach(x => { if (x.toAccountId != null) x.toAccountId = fix(x.toAccountId); });
             d.sourceAccounts = Object.fromEntries(Object.entries(d.sourceAccounts).map(([k, v]) => [k, fix(v)]));
             d.deleted = Object.fromEntries(Object.entries(d.deleted).map(([k, t]) => [k.startsWith('a:') ? 'a:' + fix(+k.slice(2)) : k, t]));
         }
@@ -704,37 +716,51 @@
             confirm: 'Supprimer cette entrée mensuelle ?'
         },
         withdrawal: {
-            list: 'withdrawals', add: 'Nouvelle dépense', edit: 'Modifier la dépense', done: 'Dépense enregistrée',
+            list: 'withdrawals', add: 'Nouvelle opération', edit: 'Modifier l\'opération', done: 'Opération enregistrée',
             read: f => {
                 const amount = num(f.amount), accountId = +f.accountId;
+                const type = ['credit', 'transfer'].includes(f.type) ? f.type : 'debit';
+                const toAccountId = type === 'transfer' ? +f.toAccountId : undefined;
                 if (!amount || !accountId) return 'Indique le montant et le compte';
-                return { name: f.name.trim() || 'Dépense', amount: Math.abs(amount), accountId, date: f.date || todayISO() };
+                if (type === 'transfer' && (!toAccountId || toAccountId === accountId)) return 'Choisis deux comptes différents';
+                return { name: f.name.trim() || { debit: 'Dépense', credit: 'Rentrée', transfer: 'Virement' }[type],
+                    amount: Math.abs(amount), accountId, toAccountId, type, date: f.date || todayISO() };
             },
-            confirm: 'Supprimer cette dépense ? Le solde du compte remontera d\'autant.'
+            confirm: 'Supprimer cette opération ? Le solde du compte sera recalculé.'
         }
     };
     let editing = null; // { kind, id|null }
 
     function openSheet(kind, id = null, preset = {}) {
         const k = KINDS[kind], dlg = $('dlg-' + kind), form = dlg.querySelector('form');
-        const item = id === null ? { type: 'depense', date: todayISO(), ...preset } : data[k.list].find(x => x.id === id);
+        const item = id === null ? { date: todayISO(), ...preset } : data[k.list].find(x => x.id === id);
         if (!item) return;
         if (kind !== 'account' && !data.accounts.length) return feedback('Crée d\'abord un compte', true);
         editing = { kind, id };
         form.reset();
         for (const el of form.elements) {
             if (!el.name) continue;
-            const v = item[el.name] ?? '';
+            // Sans valeur enregistrée, un choix (radio) prend sa première option : « Charge », « Dépense ».
+            const v = item[el.name] ?? (el.type === 'radio' ? form.elements[el.name][0].value : '');
             if (el.type === 'radio') el.checked = el.value === v;
             else el.value = v;
         }
         if (kind !== 'account' && !form.elements.accountId.value) form.elements.accountId.value = data.accounts[0].id;
+        if (form.elements.toAccountId && !form.elements.toAccountId.value) form.elements.toAccountId.value = (data.accounts[1] || data.accounts[0]).id;
+        if (kind === 'withdrawal') wdFormSync();
         dlg.querySelector('h2').textContent = id === null ? k.add : k.edit;
         dlg.querySelector('[data-action="delete"]').hidden = id === null;
         dlg.showModal();
         const first = form.querySelector('input:not([type=radio]), select');
         if (id === null) first.focus();
     }
+    // Fiche opération : « Vers mon compte » seulement pour un virement ; le libellé du compte suit le type.
+    function wdFormSync() {
+        const f = $('dlg-withdrawal').querySelector('form'), type = f.elements.type.value;
+        f.querySelector('[data-wd-to]').hidden = type !== 'transfer';
+        f.querySelector('[data-wd-from]').textContent = { debit: 'Compte débité', credit: 'Compte crédité', transfer: 'Depuis mon compte' }[type];
+    }
+    $('dlg-withdrawal').addEventListener('change', wdFormSync);
     function closeSheet() {
         document.querySelector('dialog[open]')?.close();
         editing = null;
@@ -777,8 +803,14 @@
     };
 
     // ---------- Rendu ----------
+    // Effet d'une opération sur un compte : dépense −, rentrée +, virement entre mes comptes − au départ et + à l'arrivée.
+    const isDebit = w => !w.type || w.type === 'debit';
+    function effect(w, id) {
+        if (w.type === 'credit') return w.accountId === id ? w.amount : 0;
+        return (w.type === 'transfer' && w.toAccountId === id ? w.amount : 0) - (w.accountId === id ? w.amount : 0);
+    }
     function balanceOf(a) {
-        return a.balance - data.withdrawals.filter(w => w.accountId === a.id).reduce((s, w) => s + w.amount, 0);
+        return a.balance + data.withdrawals.reduce((s, w) => s + effect(w, a.id), 0);
     }
     const color = i => i < 8 ? `var(--s${i + 1})` : 'var(--s-other)';
 
@@ -801,11 +833,13 @@
         $('flowNet').textContent = fmtS(net);
         $('flowNet').className = 'num ' + cls(net);
 
-        const month = todayISO().slice(0, 7);
-        const spent = data.withdrawals.filter(w => w.date.startsWith(month)).reduce((s, w) => s + w.amount, 0);
-        $('monthSpent').innerHTML = spent
-            ? `Dépensé ce mois-ci : <b class="num neg">${fmt(spent)}</b>`
-            : '<span class="muted">Aucune dépense ponctuelle ce mois-ci.</span>';
+        // Les virements entre mes comptes ne sont ni dépensés ni reçus : l'argent reste chez moi.
+        const month = todayISO().slice(0, 7), ops = data.withdrawals.filter(w => w.date.startsWith(month));
+        const spent = ops.filter(isDebit).reduce((s, w) => s + w.amount, 0);
+        const got = ops.filter(w => w.type === 'credit').reduce((s, w) => s + w.amount, 0);
+        $('monthSpent').innerHTML = spent || got
+            ? `Dépensé ce mois-ci : <b class="num neg">${fmt(spent)}</b>${got ? `, reçu : <b class="num pos">+${fmt(got)}</b>` : ''}`
+            : '<span class="muted">Aucune dépense ce mois-ci.</span>';
     }
 
     function entryRows(list) {
@@ -910,25 +944,32 @@
 
     function renderWithdrawals() {
         const today = todayISO(), month = today.slice(0, 7), year = today.slice(0, 4);
-        const total = f => data.withdrawals.filter(w => f(w.date)).reduce((s, w) => s + w.amount, 0);
+        const sum = (keep, f) => data.withdrawals.filter(w => keep(w) && f(w.date)).reduce((s, w) => s + w.amount, 0);
+        const isCredit = w => w.type === 'credit';
         $('wdStats').innerHTML = [
-            ["Aujourd'hui", total(d => d === today)],
-            ['Ce mois-ci', total(d => d.startsWith(month))],
-            ['Cette année', total(d => d.startsWith(year))],
-            ['Depuis le début', total(() => true)]
-        ].map(([label, v]) => `<div class="stat"><dt>${label}</dt><dd class="num">${fmt(v)}</dd></div>`).join('');
+            ["Dépensé aujourd'hui", sum(isDebit, d => d === today), ''],
+            ['Dépensé ce mois-ci', sum(isDebit, d => d.startsWith(month)), ''],
+            ['Reçu ce mois-ci', sum(isCredit, d => d.startsWith(month)), '+'],
+            ['Dépensé cette année', sum(isDebit, d => d.startsWith(year)), '']
+        ].map(([label, v, sign]) => `<div class="stat"><dt>${label}</dt><dd class="num">${v ? sign : ''}${fmt(v)}</dd></div>`).join('');
 
-        // Historique regroupé par jour, le plus récent en premier
-        const days = [...new Set(data.withdrawals.map(w => w.date))].sort().reverse();
-        $('wdList').innerHTML = days.length ? days.map(day => {
+        // Historique regroupé par jour, le plus récent en premier. Un virement entre mes comptes ne change pas le total du jour.
+        const sign = w => w.type === 'credit' ? 1 : w.type === 'transfer' ? 0 : -1;
+        const dates = [...new Set(data.withdrawals.map(w => w.date))].sort().reverse();
+        $('wdList').innerHTML = dates.length ? dates.map(day => {
             const items = data.withdrawals.filter(w => w.date === day);
+            const net = items.reduce((s, w) => s + sign(w) * w.amount, 0);
             const label = new Date(day + 'T12:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: day.startsWith(year) ? undefined : 'numeric' });
-            return `<h2 class="day"><span>${label}</span><span class="num">${fmt(items.reduce((s, w) => s + w.amount, 0))}</span></h2>
-                <ul class="list">${items.map(w => `<li><button type="button" class="row" data-action="edit" data-kind="withdrawal" data-id="${w.id}">
-                    <span class="main"><span class="title">${esc(w.name)}</span><span class="sub">${esc(accName(w.accountId))}</span></span>
-                    <span class="amt num neg">−${fmt(w.amount)}</span>
-                </button></li>`).join('')}</ul>`;
-        }).join('') : '<div class="empty" style="margin-top:12px">Aucune dépense ponctuelle. Les paiements validés depuis l\'accueil arrivent ici.</div>';
+            return `<h2 class="day"><span>${label}</span><span class="num ${net ? cls(net) : ''}">${fmtS(net)}</span></h2>
+                <ul class="list">${items.map(w => {
+                    const sg = sign(w);
+                    const where = w.type === 'transfer' ? accName(w.accountId) + ' → ' + accName(w.toAccountId) : accName(w.accountId);
+                    return `<li><button type="button" class="row" data-action="edit" data-kind="withdrawal" data-id="${w.id}">
+                    <span class="main"><span class="title">${esc(w.name)}</span><span class="sub">${esc(where)}</span></span>
+                    <span class="amt num ${sg > 0 ? 'pos' : sg < 0 ? 'neg' : ''}">${sg > 0 ? '+' : sg < 0 ? '−' : ''}${fmt(w.amount)}</span>
+                </button></li>`;
+                }).join('')}</ul>`;
+        }).join('') : '<div class="empty" style="margin-top:12px">Aucune opération. Les paiements et virements validés depuis l\'accueil arrivent ici.</div>';
     }
 
     function renderAccountSelects() {
@@ -980,8 +1021,9 @@
     };
 
     // ---------- Paiements détectés (app Android) ----------
-    // Le service natif lit les notifications des apps bancaires et garde en attente { id, amount, merchant, source, time }.
-    // Rien n'entre dans les comptes sans validation : on choisit le compte, puis la dépense est créée.
+    // Le service natif lit les notifications des apps bancaires et garde en attente
+    // { id, amount, merchant, source, time, credit, transfer, card, currency }.
+    // Rien n'entre dans les comptes sans validation : on choisit le compte (et l'autre partie), puis l'opération est créée.
     let pending = [];
     function loadPending() {
         if (!native) return;
@@ -991,11 +1033,38 @@
         $('notifBanner').hidden = granted;
         $('notifSection').hidden = false;
         $('notifStatus').innerHTML = granted
-            ? '<b>Activée.</b> Les paiements détectés apparaissent sur l\'accueil, à valider.'
+            ? '<b>Activée.</b> Les paiements et virements détectés apparaissent sur l\'accueil, à valider.'
             : '<b>Désactivée.</b> Autorise la lecture des notifications pour détecter les paiements.';
     }
     window.onPaymentsChanged = loadPending;
     document.addEventListener('visibilitychange', () => { if (!document.hidden) loadPending(); });
+
+    // Le ticket dit : sens (sorti / reçu), compte de ce côté-ci, et l'autre partie (quelqu'un d'autre, ou un de mes comptes).
+    const CUR = { EUR: '€', USD: '$', GBP: '£', CHF: 'CHF' };
+    const days = d => new Date(d + 'T12:00') / 864e5;
+    const dayOf = t => new Date(t).toLocaleDateString('sv-SE');
+    function ticketOp(p) {
+        const v = k => $(`p${k}-${p.id}`)?.value;
+        const credit = (v('s') ?? (p.credit ? 'in' : 'out')) === 'in';
+        const accountId = +v('a'), other = +(v('o') || 0), amount = Math.abs(num(v('m')) || 0);
+        const op = !other ? { type: credit ? 'credit' : 'debit', accountId }
+            : { type: 'transfer', accountId: credit ? other : accountId, toAccountId: credit ? accountId : other };
+        return { credit, accountId, other, amount, op, date: dayOf(p.time), side: credit ? 'in' : 'out' };
+    }
+    // Un virement entre mes comptes est souvent signalé deux fois (banque de départ, puis banque d'arrivée) :
+    // s'il est déjà enregistré depuis l'autre côté (même montant, à 3 jours près), on ne le compte pas une 2e fois.
+    function findTwin({ op, amount, date, side }) {
+        if (op.type !== 'transfer') return null;
+        return data.withdrawals.find(w => w.type === 'transfer' && w.accountId === op.accountId && w.toAccountId === op.toAccountId
+            && w.amount === amount && Math.abs(days(w.date) - days(date)) <= 3 && !(w.seen || []).includes(side));
+    }
+    // L'autre côté d'un virement déjà enregistré, pour le proposer d'office.
+    function guessOther(p, accountId) {
+        const side = p.credit ? 'in' : 'out';
+        const w = data.withdrawals.find(w => w.type === 'transfer' && w.amount === p.amount && !(w.seen || []).includes(side)
+            && (p.credit ? w.toAccountId : w.accountId) === accountId && Math.abs(days(w.date) - days(dayOf(p.time))) <= 3);
+        return w ? (p.credit ? w.accountId : w.toAccountId) : null;
+    }
 
     function renderPending() {
         // Garde ce que l'utilisateur a déjà modifié dans les tickets affichés
@@ -1005,43 +1074,91 @@
         $('pendingCount').textContent = pending.length;
         const opts = data.accounts.map(a => `<option value="${a.id}">${esc(a.name)}</option>`).join('');
         $('pendingList').innerHTML = pending.map(p => {
-            const when = new Date(p.time);
-            const day = when.toLocaleDateString('sv-SE') === todayISO() ? 'aujourd\'hui' : 'le ' + when.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
-            const id = esc(p.id);
-            return `<article class="ticket" aria-label="Paiement de ${fmt(p.amount)}">
+            const when = new Date(p.time), id = esc(p.id), cur = p.currency || 'EUR';
+            const day = dayOf(p.time) === todayISO() ? 'aujourd\'hui' : 'le ' + when.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+            const kind = p.transfer ? (p.credit ? 'Virement reçu' : 'Virement envoyé')
+                : p.credit ? 'Argent reçu' : 'Paiement' + (p.card ? ` carte ••${esc(p.card)}` : '');
+            const shown = cur === 'EUR' ? fmt(p.amount)
+                : `${Number(p.amount).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${esc(CUR[cur] || cur)}`;
+            const both = p.transfer || p.credit; // virement ou rentrée : le sens et l'autre partie se choisissent
+            return `<article class="ticket" aria-label="${kind}, ${p.credit ? '+' : '−'}${shown}">
                 <div class="ticket-top">
-                    <span class="ticket-amt num">−${fmt(p.amount)}</span>
-                    <span class="muted">${esc(p.source)}, ${day} à ${when.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
+                    <span class="ticket-amt num" id="pt-${id}" data-shown="${shown}">${p.credit ? '+' : '−'}${shown}</span>
+                    <span class="muted">${kind}, ${esc(p.source)}, ${day} à ${when.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
                 </div>
-                <div class="fields">
-                    <label class="field"><span>Libellé</span><input id="pn-${id}" value="${esc(p.merchant)}" placeholder="Commerçant"></label>
-                    ${data.accounts.length ? `<label class="field"><span>Compte</span><select id="pa-${id}">${opts}</select></label>` : '<p class="muted">Crée d\'abord un compte.</p>'}
+                ${cur !== 'EUR' ? `<p class="note">Paiement en ${esc(cur)} : indique le montant débité en euros.</p>` : ''}
+                ${data.accounts.length ? `<div class="fields">
+                    <label class="field"><span>Libellé</span><input id="pn-${id}" value="${esc(p.merchant)}" placeholder="${p.credit ? 'Émetteur' : 'Commerçant'}"></label>
+                    <label class="field"><span>Montant (€)</span><input id="pm-${id}" inputmode="decimal" value="${String(p.amount).replace('.', ',')}"></label>
+                    ${both ? `<label class="field"><span>Sens</span><select id="ps-${id}"><option value="out">Argent sorti</option><option value="in">Argent reçu</option></select></label>` : ''}
+                    <label class="field"><span id="pal-${id}">Compte</span><select id="pa-${id}">${opts}</select></label>
+                    ${both ? `<label class="field full"><span id="pol-${id}">Vers</span><select id="po-${id}"><option value="0">Quelqu'un d'autre</option>${opts}</select></label>` : ''}
                 </div>
+                <p class="note" id="ph-${id}" hidden></p>` : '<p class="muted">Crée d\'abord un compte.</p>'}
                 <div class="actions">
                     <button type="button" class="btn ghost" data-action="pay-no" data-id="${id}">Ignorer</button>
-                    <button type="button" class="btn" data-action="pay-ok" data-id="${id}" ${data.accounts.length ? '' : 'disabled'}>Ajouter la dépense</button>
+                    <button type="button" class="btn" data-action="pay-ok" data-id="${id}" ${data.accounts.length ? '' : 'disabled'}>Enregistrer</button>
                 </div>
             </article>`;
         }).join('');
-        // Présélectionne le dernier compte choisi pour cette app source
+        // Présélections : le compte déjà choisi pour cette carte ou cette app ; pour l'autre partie, un virement déjà
+        // enregistré depuis l'autre banque, sinon le dernier choix fait pour ce bénéficiaire ou cet émetteur.
+        const has = id => data.accounts.some(a => a.id === id);
         pending.forEach(p => {
-            const sel = $('pa-' + p.id), last = data.sourceAccounts[p.source];
-            if (sel && data.accounts.some(a => a.id === last)) sel.value = last;
+            const a = $('pa-' + p.id);
+            if (!a) return;
+            const known = data.sourceAccounts[p.card ? 'carte ' + p.card : p.source];
+            if (has(known)) a.value = known;
+            if ($('ps-' + p.id)) $('ps-' + p.id).value = p.credit ? 'in' : 'out';
+            const o = $('po-' + p.id);
+            if (o) {
+                const mem = p.merchant ? data.sourceAccounts[(p.credit ? 'de ' : 'vers ') + p.merchant.trim().toLowerCase()] : undefined;
+                o.value = guessOther(p, +a.value) ?? (mem === 0 || has(mem) ? mem : 0);
+            }
         });
         Object.entries(typed).forEach(([id, v]) => { if ($(id)) $(id).value = v; });
+        pending.forEach(updateTicket);
     }
+    // Signe, libellés et rappel « déjà compté » selon les choix faits sur le ticket.
+    function updateTicket(p) {
+        if (!$('pa-' + p.id)) return;
+        const t = ticketOp(p), amt = $('pt-' + p.id), hint = $('ph-' + p.id), twin = findTwin(t);
+        amt.textContent = (t.credit ? '+' : '−') + amt.dataset.shown;
+        $('pal-' + p.id).textContent = t.credit ? 'Compte crédité' : 'Compte débité';
+        if ($('pol-' + p.id)) $('pol-' + p.id).textContent = t.credit ? 'De' : 'Vers';
+        hint.hidden = !twin;
+        if (twin) hint.textContent = `Déjà enregistré depuis l'autre banque (${accName(twin.accountId)} → ${accName(twin.toAccountId)}) : il ne sera compté qu'une fois.`;
+    }
+    $('pendingList').addEventListener('change', e => {
+        const p = pending.find(x => e.target.id.endsWith('-' + x.id));
+        if (!p) return;
+        // Nouveau compte choisi : si un virement correspondant est déjà enregistré, on propose son autre côté.
+        const o = $('po-' + p.id);
+        if (e.target.id === 'pa-' + p.id && o && o.value === '0') o.value = guessOther(p, +e.target.value) ?? 0;
+        updateTicket(p);
+    });
+
     function validatePayment(id) {
         const p = pending.find(x => x.id === id);
-        const accountId = +$('pa-' + id)?.value;
-        if (!p || !accountId) return;
-        const name = $('pn-' + id).value.trim() || 'Paiement';
-        // nt = heure de la notification : sert à repérer ce même paiement sur l'autre téléphone (voir onSyncData)
-        data.withdrawals.push({ id: newId(), name, amount: p.amount, accountId, date: new Date(p.time).toLocaleDateString('sv-SE'), updatedAt: Date.now(), nt: p.time });
-        data.sourceAccounts[p.source] = accountId;
+        if (!p || !data.accounts.length) return;
+        const t = ticketOp(p);
+        if (!t.amount || !t.accountId) return feedback('Indique le montant et le compte', true);
+        if (t.other === t.accountId) return feedback('Choisis deux comptes différents', true);
+        const name = $('pn-' + id).value.trim() || (t.op.type === 'transfer' ? 'Virement' : t.credit ? 'Rentrée' : 'Paiement');
+        // Mémorise les choix pour les prochaines notifications
+        data.sourceAccounts[p.card ? 'carte ' + p.card : p.source] = t.accountId;
+        if (p.merchant && $('po-' + id)) data.sourceAccounts[(t.credit ? 'de ' : 'vers ') + p.merchant.trim().toLowerCase()] = t.other;
+        const twin = findTwin(t);
+        if (twin) Object.assign(twin, { seen: [...(twin.seen || []), t.side], updatedAt: Date.now() });
+        // nt = heure de la notification : sert à repérer ce même mouvement sur l'autre téléphone (voir onSyncData)
+        else data.withdrawals.push({ id: newId(), name, amount: t.amount, date: t.date, ...t.op,
+            ...(t.op.type === 'transfer' ? { seen: [t.side] } : {}), updatedAt: Date.now(), nt: p.time });
         save(); // enregistre d'abord, puis retire de la file : pas de perte si l'app s'arrête entre les deux
         native.ack(id);
         loadPending();
-        feedback(`Dépense de ${fmt(p.amount)} ajoutée à ${accName(accountId)}`);
+        feedback(twin ? 'Virement déjà enregistré : compté une seule fois'
+            : t.op.type === 'transfer' ? `Virement de ${fmt(t.amount)} : ${accName(t.op.accountId)} → ${accName(t.op.toAccountId)}`
+            : `${t.credit ? 'Rentrée' : 'Dépense'} de ${fmt(t.amount)} enregistrée sur ${accName(t.accountId)}`);
     }
     function rejectPayment(id) {
         native.ack(id);
@@ -1073,7 +1190,10 @@
             savings: +obj.savings || 0,
             savingsAt: t(obj.savingsAt),
             deleted: Object.fromEntries(Object.entries(obj.deleted || {}).filter(([k, v]) => /^[aew]:\d+$/.test(k) && isFinite(v)).map(([k, v]) => [k, +v])),
-            withdrawals: (obj.withdrawals || []).map(w => ({ id: n(w.id), name: str(w.name), amount: n(w.amount), accountId: n(w.accountId), date: day(w.date), updatedAt: t(w.updatedAt), ...(w.nt ? { nt: t(w.nt) } : {}) })),
+            withdrawals: (obj.withdrawals || []).map(w => ({ id: n(w.id), name: str(w.name), amount: n(w.amount), accountId: n(w.accountId), date: day(w.date), updatedAt: t(w.updatedAt), ...(w.nt ? { nt: t(w.nt) } : {}),
+                ...(['debit', 'credit', 'transfer'].includes(w.type) ? { type: w.type } : {}),
+                ...(w.type === 'transfer' ? { toAccountId: n(w.toAccountId) } : {}),
+                ...(Array.isArray(w.seen) ? { seen: w.seen.filter(x => x === 'in' || x === 'out') } : {}) })),
             sourceAccounts: Object.fromEntries(Object.entries(obj.sourceAccounts || {}).map(([k, v]) => [str(k), n(v)]))
         };
     }

@@ -10,7 +10,8 @@ import java.util.UUID
 
 /**
  * Lit les notifications des apps de [PAYMENT_APPS], en extrait montant et commerçant,
- * et met le résultat en attente de validation. Le texte brut de la notification n'est jamais stocké.
+ * et met le résultat en attente de validation (montant, sens, autre partie, carte, devise).
+ * Le texte brut de la notification n'est jamais stocké.
  */
 class PaymentListenerService : NotificationListenerService() {
     // ponytail: dédoublonnage en mémoire (même paquet + même texte à moins de 2 min), perdu si le service redémarre ; suffisant pour les doublons immédiats.
@@ -53,6 +54,18 @@ object PaymentStore {
     @Synchronized
     fun add(c: Context, p: Payment, source: String, time: Long) {
         val all = read(c)
+        // Un même paiement signalé par une 2e app (Google Wallet + l'app N26) : on complète le premier, sans doublon.
+        for (i in 0 until all.length()) {
+            val o = all.getJSONObject(i)
+            val sources = o.optJSONArray("sources")?.let { a -> List(a.length(), a::getString) } ?: listOf(o.optString("source"))
+            val known = Payment(o.optDouble("amount"), "", o.optBoolean("credit"))
+            if (source in sources || !sameMovement(known, o.optLong("time"), p, time)) continue
+            if (o.optString("merchant").isEmpty()) o.put("merchant", p.merchant)
+            if (o.optString("card").isEmpty()) o.put("card", p.card)
+            o.put("transfer", o.optBoolean("transfer") || p.transfer)
+            o.put("sources", JSONArray(sources + source))
+            return save(c, all)
+        }
         all.put(
             JSONObject()
                 .put("id", UUID.randomUUID().toString())
@@ -60,16 +73,22 @@ object PaymentStore {
                 .put("merchant", p.merchant)
                 .put("source", source)
                 .put("time", time)
+                .put("credit", p.credit)
+                .put("transfer", p.transfer)
+                .put("card", p.card)
+                .put("currency", p.currency)
         )
         while (all.length() > MAX) all.remove(0)
-        prefs(c).edit().putString(KEY, all.toString()).apply()
+        save(c, all)
     }
+
+    private fun save(c: Context, all: JSONArray) = prefs(c).edit().putString(KEY, all.toString()).apply()
 
     @Synchronized
     fun ack(c: Context, id: String) {
         val all = read(c)
         val kept = JSONArray()
         for (i in 0 until all.length()) all.getJSONObject(i).takeIf { it.optString("id") != id }?.let(kept::put)
-        prefs(c).edit().putString(KEY, kept.toString()).apply()
+        save(c, kept)
     }
 }

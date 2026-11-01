@@ -14,6 +14,19 @@ Suivi de mes comptes sur Android, sans rien saisir : l'app lit les notifications
    - Android 13 et plus : si l'interrupteur est grisé (« paramètre restreint »), va dans **Paramètres → Applications → MoneyTracker → menu ⋮ → Autoriser les paramètres restreints**, puis recommence.
 4. Ajoute tes comptes (onglet **Comptes**). Au prochain paiement, il apparaît sur l'accueil.
 
+## Ce que l'app détecte
+
+Apps surveillées : Google Wallet, Caisse d'Épargne (Banxo), N26, Revolut. Chaque notification avec un montant devient un ticket « À valider » :
+
+- **Paiement par carte** (Wallet) : commerçant, et les 4 derniers chiffres de la carte. Le compte choisi pour une carte est retenu (carte ••5678 → Revolut).
+- **Virement envoyé** (« … vers X ») ou **reçu** (« reçu … de X ») : choisis « Vers » ou « De » : quelqu'un d'autre, ou **un de tes comptes**. Dans ce cas, c'est un virement entre tes comptes : le départ baisse, l'arrivée monte, le patrimoine ne bouge pas. Le choix est retenu pour ce bénéficiaire.
+- **Le même virement vu par les deux banques** (départ et arrivée) n'est compté qu'une fois : le ticket le signale (« déjà enregistré depuis l'autre banque »).
+- **Le même paiement vu par Wallet et par l'app de la banque** ne donne qu'un seul ticket.
+- **Paiement à l'étranger** (dollars, livres, francs suisses) : corrige le montant en euros sur le ticket.
+- Ignorés : paiements refusés ou annulés, alertes de solde.
+
+Rien n'est ajouté sans ta validation. Les formulations des banques varient : si un ticket est faux, corrige-le avant d'enregistrer, et signale-le pour que la détection soit ajustée.
+
 ## Mettre à jour
 
 Télécharge le nouvel APK depuis Releases et installe-le **par-dessus** : les données sont conservées (même identifiant d'app, même signature).

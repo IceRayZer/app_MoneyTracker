@@ -95,4 +95,14 @@ function both(a, b) {
     assert.equal(JSON.stringify(b), snap);
 }
 
-console.log('merge: 8 scénarios OK');
+// 9. Virement entre deux comptes jumeaux : le compte d'arrivée est renommé lui aussi
+{
+    const a = mk({ accounts: [acc(300, 'N26'), acc(301, 'CE')], withdrawals: [wd(310, 301, 2, { type: 'transfer', toAccountId: 300 })] });
+    const b = mk({ accounts: [acc(200, 'N26')] });
+    const r = both(a, b);
+    const t = r.data.withdrawals[0];
+    assert.equal(t.toAccountId, 200);
+    assert.equal(t.accountId, 301);
+}
+
+console.log('merge: 9 scénarios OK');
