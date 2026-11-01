@@ -48,6 +48,13 @@ class PaymentParserTest {
         assertEquals("EUR", p.currency)
     }
 
+    @Test fun n26ReelVirementRecu() {
+        val p = mv("N26", "Vous avez reçu 0,37 € de EDEN GXXXX", "de.number26.android")
+        assertEquals(0.37, p.amount, 0.001)
+        assertEquals(true, p.credit)
+        assertEquals("EDEN GXXXX", p.merchant)
+    }
+
     @Test fun walletReelEnDollars() {
         val p = mv("TRADER JOE S #1234", "\$34.62 with Visa •••• 5678", wallet)
         assertEquals(34.62, p.amount, 0.001)
